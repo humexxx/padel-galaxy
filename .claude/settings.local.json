@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -la /Users/jasonhume/code/humexxx/padel-galaxy/ 2>/dev/null && echo \"---\" && ls -la /Users/jasonhume/code/humexxx/ 2>/dev/null)"
+    ]
+  }
+}

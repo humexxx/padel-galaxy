@@ -18,9 +18,6 @@ export default function LoginPage() {
             </Suspense>
           </div>
         </div>
-        <p className="text-center text-xs text-muted-foreground md:text-left">
-          Hecho con shadcn/ui · Padel Galaxy
-        </p>
       </div>
       <div className="relative hidden bg-[#0b0820] lg:block">
         <Image

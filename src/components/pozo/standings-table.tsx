@@ -1,4 +1,12 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import { cn } from "@/lib/utils"
 import type { PlayerStanding } from "@/lib/pozo/types"
 
@@ -10,55 +18,55 @@ export function StandingsTable({
   highlightTop?: number
 }) {
   return (
-    <Card>
-      <CardHeader>
+    <Card className="overflow-hidden">
+      <CardHeader className="pb-0">
         <CardTitle className="text-base">Tabla de posiciones</CardTitle>
       </CardHeader>
-      <CardContent className="p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-left text-xs text-muted-foreground">
-              <tr className="border-b">
-                <th className="px-4 py-2 font-medium">#</th>
-                <th className="px-2 py-2 font-medium">Jugador</th>
-                <th className="px-2 py-2 text-center font-medium">PJ</th>
-                <th className="px-2 py-2 text-center font-medium">PG</th>
-                <th className="px-2 py-2 text-center font-medium">GF</th>
-                <th className="px-2 py-2 text-center font-medium">GC</th>
-                <th className="px-2 py-2 text-center font-medium">DIF</th>
-                <th className="px-3 py-2 text-right font-medium">Pts</th>
-              </tr>
-            </thead>
-            <tbody>
-              {standings.map((s, i) => (
-                <tr
-                  key={s.player.id}
+      <CardContent className="px-0 pb-0">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-10 pl-4">#</TableHead>
+              <TableHead>Jugador</TableHead>
+              <TableHead className="text-center">PJ</TableHead>
+              <TableHead className="text-center">PG</TableHead>
+              <TableHead className="hidden text-center sm:table-cell">GF</TableHead>
+              <TableHead className="hidden text-center sm:table-cell">GC</TableHead>
+              <TableHead className="text-center">DIF</TableHead>
+              <TableHead className="pr-4 text-right">Pts</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {standings.map((s, i) => (
+              <TableRow key={s.player.id} className={cn(i < highlightTop && "bg-primary/5")}>
+                <TableCell className="pl-4 font-semibold tabular-nums">{i + 1}</TableCell>
+                <TableCell className="font-medium">{s.player.name}</TableCell>
+                <TableCell className="text-center tabular-nums text-muted-foreground">
+                  {s.matchesPlayed}
+                </TableCell>
+                <TableCell className="text-center tabular-nums">{s.matchesWon}</TableCell>
+                <TableCell className="hidden text-center tabular-nums text-muted-foreground sm:table-cell">
+                  {s.gamesWon}
+                </TableCell>
+                <TableCell className="hidden text-center tabular-nums text-muted-foreground sm:table-cell">
+                  {s.gamesLost}
+                </TableCell>
+                <TableCell
                   className={cn(
-                    "border-b last:border-0 transition",
-                    i < highlightTop && "bg-primary/5",
+                    "text-center tabular-nums",
+                    s.gamesDiff > 0 && "text-emerald-600 dark:text-emerald-400",
+                    s.gamesDiff < 0 && "text-destructive",
                   )}
                 >
-                  <td className="px-4 py-2.5 font-semibold tabular-nums">{i + 1}</td>
-                  <td className="px-2 py-2.5 font-medium">{s.player.name}</td>
-                  <td className="px-2 py-2.5 text-center tabular-nums text-muted-foreground">
-                    {s.matchesPlayed}
-                  </td>
-                  <td className="px-2 py-2.5 text-center tabular-nums">{s.matchesWon}</td>
-                  <td className="px-2 py-2.5 text-center tabular-nums text-muted-foreground">
-                    {s.gamesWon}
-                  </td>
-                  <td className="px-2 py-2.5 text-center tabular-nums text-muted-foreground">
-                    {s.gamesLost}
-                  </td>
-                  <td className={cn("px-2 py-2.5 text-center tabular-nums", s.gamesDiff > 0 && "text-emerald-600 dark:text-emerald-400", s.gamesDiff < 0 && "text-destructive")}>
-                    {s.gamesDiff > 0 ? `+${s.gamesDiff}` : s.gamesDiff}
-                  </td>
-                  <td className="px-3 py-2.5 text-right font-semibold tabular-nums">{s.points}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  {s.gamesDiff > 0 ? `+${s.gamesDiff}` : s.gamesDiff}
+                </TableCell>
+                <TableCell className="pr-4 text-right font-semibold tabular-nums">
+                  {s.points}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       </CardContent>
     </Card>
   )

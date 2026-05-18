@@ -22,16 +22,17 @@ export default function LoginPage() {
           Hecho con shadcn/ui · Padel Galaxy
         </p>
       </div>
-      <div className="relative hidden bg-muted lg:block">
+      <div className="relative hidden bg-[#0b0820] lg:block">
         <Image
-          src="/login-bg.svg"
+          src="/login-bg.jpg"
           alt="Padel Galaxy"
           fill
           priority
+          sizes="50vw"
           className="object-cover"
         />
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-10">
-          <p className="max-w-md text-xl font-semibold text-white">
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent p-10">
+          <p className="max-w-md text-2xl font-semibold text-white">
             Tus pozos, organizados.
           </p>
           <p className="mt-2 max-w-md text-sm text-white/80">

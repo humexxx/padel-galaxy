@@ -1,27 +1,21 @@
 import type { Match, Pair, PairingAlgorithm, Player, Pozo } from "./types"
 
-const PARTNER_REPEAT_PENALTY = 100
-const PARTNER_REPEAT_SOFT = 3
-const OPPONENT_REPEAT_PENALTY = 8
-const SKILL_GAP_WEIGHT = 4
+const PARTNER_REPEAT_PENALTY = 1000
+const PARTNER_REPEAT_SOFT = 4
+const OPPONENT_REPEAT_PENALTY = 10
+const SKILL_GAP_WEIGHT = 5
 
 type Combination = {
   teamA: Pair
   teamB: Pair
 }
 
-function teamCombinations(group: Player[]): Combination[] {
-  if (group.length !== 4) return []
-  const [p1, p2, p3, p4] = group
-  return [
-    { teamA: { playerA: p1.id, playerB: p2.id }, teamB: { playerA: p3.id, playerB: p4.id } },
-    { teamA: { playerA: p1.id, playerB: p3.id }, teamB: { playerA: p2.id, playerB: p4.id } },
-    { teamA: { playerA: p1.id, playerB: p4.id }, teamB: { playerA: p2.id, playerB: p3.id } },
-  ]
-}
-
 function pairKey(pair: Pair): string {
   return [pair.playerA, pair.playerB].sort().join("|")
+}
+
+function pairKeyIds(a: string, b: string): string {
+  return [a, b].sort().join("|")
 }
 
 function matchupKey(a: string, b: string): string {
@@ -87,166 +81,258 @@ function shuffle<T>(arr: T[]): T[] {
   return a
 }
 
-function combinationsOfFour<T>(items: T[]): T[][] {
-  const result: T[][] = []
-  for (let a = 0; a < items.length; a++)
-    for (let b = a + 1; b < items.length; b++)
-      for (let c = b + 1; c < items.length; c++)
-        for (let d = c + 1; d < items.length; d++)
-          result.push([items[a], items[b], items[c], items[d]])
-  return result
-}
-
 function strengthOf(playerId: string, history: History): number {
   return (history.wins.get(playerId) ?? 0) + (history.gamesDiff.get(playerId) ?? 0) / 6
 }
 
-function scoreCombination(
-  combo: Combination,
-  history: History,
-  allowRepeatPairs: boolean,
-  algorithm: PairingAlgorithm,
-): number {
-  let penalty = 0
-
-  const repeatA = history.partnerCount.get(pairKey(combo.teamA)) ?? 0
-  const repeatB = history.partnerCount.get(pairKey(combo.teamB)) ?? 0
-  penalty += allowRepeatPairs
-    ? (repeatA + repeatB) * PARTNER_REPEAT_SOFT
-    : (repeatA + repeatB) * PARTNER_REPEAT_PENALTY
-
-  const teamAIds = [combo.teamA.playerA, combo.teamA.playerB]
-  const teamBIds = [combo.teamB.playerA, combo.teamB.playerB]
-  for (const a of teamAIds) for (const b of teamBIds) {
-    penalty += (history.opponentCount.get(matchupKey(a, b)) ?? 0) * OPPONENT_REPEAT_PENALTY
-  }
-
-  if (algorithm === "balanced") {
-    const teamAStrength = strengthOf(combo.teamA.playerA, history) + strengthOf(combo.teamA.playerB, history)
-    const teamBStrength = strengthOf(combo.teamB.playerA, history) + strengthOf(combo.teamB.playerB, history)
-    penalty += Math.abs(teamAStrength - teamBStrength) * SKILL_GAP_WEIGHT
-  }
-
-  if (algorithm === "snake") {
-    const ordered = [combo.teamA.playerA, combo.teamA.playerB, combo.teamB.playerA, combo.teamB.playerB]
-      .map((id) => ({ id, s: strengthOf(id, history) }))
-      .sort((a, b) => b.s - a.s)
-    const topBottom = new Set([ordered[0].id, ordered[3].id])
-    const teamAOnSnake =
-      topBottom.has(combo.teamA.playerA) === topBottom.has(combo.teamA.playerB)
-    if (!teamAOnSnake) penalty += 12
-  }
-
-  return penalty
-}
-
-function pickBestCombination(
-  group: Player[],
-  history: History,
-  allowRepeatPairs: boolean,
-  algorithm: PairingAlgorithm,
-): Combination {
-  const combos = teamCombinations(group)
-  if (algorithm === "random") {
-    return combos[Math.floor(Math.random() * combos.length)]
-  }
-  let best = combos[0]
-  let bestScore = Infinity
-  for (const combo of combos) {
-    const s = scoreCombination(combo, history, allowRepeatPairs, algorithm)
-    if (s < bestScore) {
-      bestScore = s
-      best = combo
+/**
+ * Canonical round-robin (circle method).
+ * For even N: returns N-1 rounds, each with N/2 disjoint pairs covering all players.
+ * Every pair of players partners together exactly once across the schedule.
+ */
+function canonicalRoundRobin(players: Player[]): Pair[][] {
+  const n = players.length
+  if (n < 2 || n % 2 !== 0) return []
+  const ids = players.map((p) => p.id)
+  const rounds: Pair[][] = []
+  // Anchor ids[0], rotate ids[1..n-1]
+  const fixed = ids[0]
+  const rotating = ids.slice(1)
+  const rotN = rotating.length
+  for (let r = 0; r < n - 1; r++) {
+    const pairs: Pair[] = []
+    pairs.push({ playerA: fixed, playerB: rotating[r % rotN] })
+    for (let i = 1; i < n / 2; i++) {
+      const aIdx = (r + i) % rotN
+      const bIdx = (r - i + rotN) % rotN
+      pairs.push({ playerA: rotating[aIdx], playerB: rotating[bIdx] })
     }
+    rounds.push(pairs)
   }
-  return best
+  return rounds
 }
 
-function scoreGrouping(
-  groups: Player[][],
-  history: History,
-  allowRepeatPairs: boolean,
-  algorithm: PairingAlgorithm,
-): number {
-  let total = 0
-  for (const group of groups) {
-    if (group.length !== 4) continue
-    const combos = teamCombinations(group)
-    let best = Infinity
-    for (const combo of combos) {
-      const s = scoreCombination(combo, history, allowRepeatPairs, algorithm)
-      if (s < best) best = s
-    }
-    total += best
-  }
-  return total
-}
-
-function partitionIntoCourts(
+/**
+ * Backtracking: find a perfect pairing of `pool` honoring history & algorithm.
+ * Uses ranked candidates (by combined penalty) to prefer good pairings.
+ */
+function findPairing(
   pool: Player[],
   history: History,
-  allowRepeatPairs: boolean,
   algorithm: PairingAlgorithm,
-  courts: number,
-): Player[][] {
-  if (pool.length !== courts * 4) {
-    const groups: Player[][] = []
-    const shuffled = shuffle(pool)
-    for (let i = 0; i < courts && (i + 1) * 4 <= shuffled.length; i++) {
-      groups.push(shuffled.slice(i * 4, i * 4 + 4))
-    }
-    return groups
-  }
-  if (courts === 1) return [pool]
+  allowRepeatPairs: boolean,
+): Pair[] | null {
+  if (pool.length % 2 !== 0) return null
+  const used = new Set<string>()
+  const result: Pair[] = []
 
-  const tries = algorithm === "random" ? 1 : Math.min(60, courts * 18)
-  let bestGrouping: Player[][] = []
-  let bestScore = Infinity
-  for (let attempt = 0; attempt < tries; attempt++) {
-    const shuffled = attempt === 0 ? pool : shuffle(pool)
-    const groups: Player[][] = []
-    for (let i = 0; i < courts; i++) {
-      groups.push(shuffled.slice(i * 4, i * 4 + 4))
+  function candidateScore(a: string, b: string): number {
+    const repeats = history.partnerCount.get(pairKeyIds(a, b)) ?? 0
+    let s = allowRepeatPairs ? repeats * PARTNER_REPEAT_SOFT : repeats * PARTNER_REPEAT_PENALTY
+    if (algorithm === "snake") {
+      // Prefer "strong + weak" pairs (maximize strength differential)
+      const diff = Math.abs(strengthOf(a, history) - strengthOf(b, history))
+      s -= diff * 2
+    } else if (algorithm === "balanced") {
+      // Prefer similar-strength pairs (we'll balance teams later by grouping)
+      const diff = Math.abs(strengthOf(a, history) - strengthOf(b, history))
+      s += diff * 0.5
     }
-    const score = scoreGrouping(groups, history, allowRepeatPairs, algorithm)
-    if (score < bestScore) {
-      bestScore = score
-      bestGrouping = groups
-    }
+    return s
   }
-  return bestGrouping
+
+  function pickNext(): Player | null {
+    for (const p of pool) if (!used.has(p.id)) return p
+    return null
+  }
+
+  function backtrack(): boolean {
+    const next = pickNext()
+    if (!next) return true
+    used.add(next.id)
+    const candidates = pool
+      .filter((p) => !used.has(p.id))
+      .map((p) => ({ p, score: candidateScore(next.id, p.id) }))
+      .sort((a, b) => a.score - b.score)
+
+    for (const { p } of candidates) {
+      const repeats = history.partnerCount.get(pairKeyIds(next.id, p.id)) ?? 0
+      if (!allowRepeatPairs && repeats > 0) continue
+      used.add(p.id)
+      result.push({ playerA: next.id, playerB: p.id })
+      if (backtrack()) return true
+      result.pop()
+      used.delete(p.id)
+    }
+    used.delete(next.id)
+    return false
+  }
+
+  return backtrack() ? result : null
 }
 
+/**
+ * Fallback when no zero-repeat pairing exists: minimize total repeats greedily.
+ */
+function findPairingMinRepeats(pool: Player[], history: History): Pair[] {
+  const result: Pair[] = []
+  const used = new Set<string>()
+  while (used.size < pool.length) {
+    const remaining = pool.filter((p) => !used.has(p.id))
+    if (remaining.length < 2) break
+    const [first, ...rest] = remaining
+    const partner = rest
+      .map((p) => ({ p, r: history.partnerCount.get(pairKeyIds(first.id, p.id)) ?? 0 }))
+      .sort((a, b) => a.r - b.r)[0].p
+    result.push({ playerA: first.id, playerB: partner.id })
+    used.add(first.id)
+    used.add(partner.id)
+  }
+  return result
+}
+
+/**
+ * Group the round's pairs into matches (2 pairs per match) minimizing
+ * opponent repeats and team-strength imbalance.
+ */
+function groupPairsIntoMatches(
+  pairs: Pair[],
+  history: History,
+  algorithm: PairingAlgorithm,
+): Combination[] {
+  if (pairs.length % 2 !== 0 || pairs.length === 0) return []
+
+  function pairStrength(p: Pair) {
+    return strengthOf(p.playerA, history) + strengthOf(p.playerB, history)
+  }
+
+  function matchScore(a: Pair, b: Pair): number {
+    let score = 0
+    const aIds = [a.playerA, a.playerB]
+    const bIds = [b.playerA, b.playerB]
+    for (const ai of aIds) {
+      for (const bi of bIds) {
+        score += (history.opponentCount.get(matchupKey(ai, bi)) ?? 0) * OPPONENT_REPEAT_PENALTY
+      }
+    }
+    if (algorithm === "balanced") {
+      score += Math.abs(pairStrength(a) - pairStrength(b)) * SKILL_GAP_WEIGHT
+    }
+    return score
+  }
+
+  let best: Combination[] | null = null
+  let bestScore = Infinity
+
+  function backtrack(remaining: Pair[], current: Combination[], currentScore: number) {
+    if (remaining.length === 0) {
+      if (currentScore < bestScore) {
+        bestScore = currentScore
+        best = current.map((c) => ({ ...c }))
+      }
+      return
+    }
+    if (currentScore >= bestScore) return
+    const first = remaining[0]
+    for (let i = 1; i < remaining.length; i++) {
+      const other = remaining[i]
+      const score = matchScore(first, other)
+      const next = remaining.filter((_, idx) => idx !== 0 && idx !== i)
+      current.push({ teamA: first, teamB: other })
+      backtrack(next, current, currentScore + score)
+      current.pop()
+    }
+  }
+
+  backtrack(pairs, [], 0)
+  if (best) return best
+  const fallback: Combination[] = []
+  for (let i = 0; i < pairs.length / 2; i++) {
+    fallback.push({ teamA: pairs[i * 2], teamB: pairs[i * 2 + 1] })
+  }
+  return fallback
+}
+
+/**
+ * Choose players for this round. If we have more players than slots, prefer
+ * those with the fewest matches played (round-robin rotation).
+ */
 function pickPlayersForRound(
   players: Player[],
   history: History,
   courts: number,
   algorithm: PairingAlgorithm,
-  allowRepeatPairs: boolean,
-): Player[][] {
+): Player[] {
   const needed = courts * 4
-  if (players.length < 4) return []
+  if (players.length <= needed) return [...players]
+  return [...players]
+    .sort((a, b) => {
+      const restA = history.matchesPlayed.get(a.id) ?? 0
+      const restB = history.matchesPlayed.get(b.id) ?? 0
+      if (restA !== restB) return restA - restB
+      if (algorithm === "balanced") {
+        return strengthOf(b.id, history) - strengthOf(a.id, history)
+      }
+      return Math.random() - 0.5
+    })
+    .slice(0, needed)
+}
 
-  const sortedByRest = [...players].sort((a, b) => {
-    const restA = history.matchesPlayed.get(a.id) ?? 0
-    const restB = history.matchesPlayed.get(b.id) ?? 0
-    if (restA !== restB) return restA - restB
-    return Math.random() - 0.5
-  })
-
-  const pool = sortedByRest.slice(0, Math.min(needed, players.length))
-
-  if (algorithm === "balanced" && pool.length === needed) {
-    const ranked = [...pool].sort((a, b) => strengthOf(b.id, history) - strengthOf(a.id, history))
-    const groups: Player[][] = Array.from({ length: courts }, () => [])
-    for (let i = 0; i < ranked.length; i++) {
-      const courtIndex = Math.floor(i / 4)
-      groups[courtIndex % courts].push(ranked[i])
-    }
-    return groups
+/**
+ * Plan a single round: produce pairings (honoring no-repeat if requested)
+ * and group them into matches per algorithm preference.
+ */
+function planRound(
+  pool: Player[],
+  history: History,
+  algorithm: PairingAlgorithm,
+  allowRepeatPairs: boolean,
+  prebuiltPairs?: Pair[],
+): Combination[] {
+  if (prebuiltPairs) {
+    return groupPairsIntoMatches(prebuiltPairs, history, algorithm)
   }
 
-  return partitionIntoCourts(pool, history, allowRepeatPairs, algorithm, courts)
+  const attempts = algorithm === "random" ? 12 : 60
+  let bestRound: Combination[] | null = null
+  let bestScore = Infinity
+
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    const shuffled = attempt === 0 ? pool : shuffle(pool)
+    const pairs =
+      findPairing(shuffled, history, algorithm, allowRepeatPairs) ??
+      findPairingMinRepeats(shuffled, history)
+    const matches = groupPairsIntoMatches(pairs, history, algorithm)
+
+    let score = 0
+    for (const m of matches) {
+      const repA = history.partnerCount.get(pairKey(m.teamA)) ?? 0
+      const repB = history.partnerCount.get(pairKey(m.teamB)) ?? 0
+      score += allowRepeatPairs
+        ? (repA + repB) * PARTNER_REPEAT_SOFT
+        : (repA + repB) * PARTNER_REPEAT_PENALTY
+      const aIds = [m.teamA.playerA, m.teamA.playerB]
+      const bIds = [m.teamB.playerA, m.teamB.playerB]
+      for (const a of aIds) {
+        for (const b of bIds) {
+          score += (history.opponentCount.get(matchupKey(a, b)) ?? 0) * OPPONENT_REPEAT_PENALTY
+        }
+      }
+      if (algorithm === "balanced") {
+        const sA = strengthOf(m.teamA.playerA, history) + strengthOf(m.teamA.playerB, history)
+        const sB = strengthOf(m.teamB.playerA, history) + strengthOf(m.teamB.playerB, history)
+        score += Math.abs(sA - sB) * SKILL_GAP_WEIGHT
+      }
+    }
+
+    if (score < bestScore) {
+      bestScore = score
+      bestRound = matches
+      if (score === 0) break
+    }
+  }
+
+  return bestRound ?? []
 }
 
 export function computeTotalRounds(playerCount: number, courts: number, matchesPerPlayer: number): number {
@@ -263,34 +349,48 @@ export function defaultMatchesPerPlayer(playerCount: number, courts: number): nu
   return Math.max(1, Math.floor((playerCount - 1) / 2))
 }
 
+/**
+ * Determine whether to use the canonical round-robin schedule.
+ * Conditions: players exactly fill courts (no rotation), allowRepeatPairs is off,
+ * and round index is within the first N-1 rounds.
+ */
+function shouldUseCanonicalSchedule(pozo: Pozo): boolean {
+  return (
+    !pozo.config.allowRepeatPairs &&
+    pozo.players.length === pozo.config.courts * 4 &&
+    pozo.players.length % 2 === 0
+  )
+}
+
 export function generateRound(pozo: Pozo, roundIndex: number): Match[] {
   const history = buildHistory(pozo.matches, pozo.players)
-  const groups = pickPlayersForRound(
+  const pool = pickPlayersForRound(
     pozo.players,
     history,
     pozo.config.courts,
     pozo.config.algorithm,
-    pozo.config.allowRepeatPairs,
   )
-  return groups
-    .filter((g) => g.length === 4)
-    .map((group, idx) => {
-      const combo = pickBestCombination(
-        group,
-        history,
-        pozo.config.allowRepeatPairs,
-        pozo.config.algorithm,
-      )
-      return {
-        id: crypto.randomUUID(),
-        round: roundIndex,
-        court: idx + 1,
-        teamA: combo.teamA,
-        teamB: combo.teamB,
-        gamesA: null,
-        gamesB: null,
-      }
-    })
-}
+  if (pool.length < 4) return []
 
-export { combinationsOfFour }
+  let combos: Combination[]
+  if (shouldUseCanonicalSchedule(pozo)) {
+    const allRounds = canonicalRoundRobin(pool)
+    if (roundIndex < allRounds.length) {
+      combos = planRound(pool, history, pozo.config.algorithm, pozo.config.allowRepeatPairs, allRounds[roundIndex])
+    } else {
+      combos = planRound(pool, history, pozo.config.algorithm, true)
+    }
+  } else {
+    combos = planRound(pool, history, pozo.config.algorithm, pozo.config.allowRepeatPairs)
+  }
+
+  return combos.map((c, idx) => ({
+    id: crypto.randomUUID(),
+    round: roundIndex,
+    court: idx + 1,
+    teamA: c.teamA,
+    teamB: c.teamB,
+    gamesA: null,
+    gamesB: null,
+  }))
+}

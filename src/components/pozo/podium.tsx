@@ -74,7 +74,7 @@ export function Podium({ standings }: Props) {
               {label}
             </p>
             <p className="mt-1 text-xs text-muted-foreground tabular-nums">
-              {player.points} pts ·{" "}
+              {player.gamesWon} games ·{" "}
               <span className={cn(player.gamesDiff > 0 && "text-emerald-600 dark:text-emerald-400", player.gamesDiff < 0 && "text-destructive")}>
                 {player.gamesDiff > 0 ? `+${player.gamesDiff}` : player.gamesDiff}
               </span>

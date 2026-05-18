@@ -70,6 +70,16 @@ function getPartnerPairs(matches: Match[]): string[] {
   return out
 }
 
+function foursomeKey(ids: string[]): string {
+  return [...ids].sort().join("#")
+}
+
+function getFoursomes(matches: Match[]): string[] {
+  return matches.map((m) =>
+    foursomeKey([m.teamA.playerA, m.teamA.playerB, m.teamB.playerA, m.teamB.playerB]),
+  )
+}
+
 function countDuplicates(items: string[]): number {
   const map = new Map<string, number>()
   for (const i of items) map.set(i, (map.get(i) ?? 0) + 1)
@@ -517,4 +527,88 @@ describe("stress / edge cases", () => {
     }
     expect(totalDups).toBe(0)
   })
+})
+
+describe("no-foursome-repeats (same 4 players never play together twice)", () => {
+  it.each(["balanced", "random", "snake"] as PairingAlgorithm[])(
+    "%s algorithm: 8 players × 2 courts × 7 rounds — no foursome repeats",
+    (algorithm) => {
+      const pozo = makePozo({
+        players: 8,
+        courts: 2,
+        matchesPerPlayer: 7,
+        algorithm,
+        allowRepeatPairs: false,
+      })
+      const finished = simulateFullPozo(pozo, () => [3, 3])
+      const dups = countDuplicates(getFoursomes(finished.matches))
+      // With 8 players you have C(8,4) = 70 possible foursomes and need 14
+      // → easy to avoid all repeats
+      expect(dups).toBe(0)
+    },
+  )
+
+  it.each(["balanced", "random", "snake"] as PairingAlgorithm[])(
+    "%s algorithm: 12 players × 3 courts × 11 rounds — no foursome repeats",
+    (algorithm) => {
+      const pozo = makePozo({
+        players: 12,
+        courts: 3,
+        matchesPerPlayer: 11,
+        algorithm,
+        allowRepeatPairs: false,
+      })
+      const finished = simulateFullPozo(pozo, () => [3, 3])
+      const dups = countDuplicates(getFoursomes(finished.matches))
+      // C(12,4) = 495 possible foursomes, need 33 → plenty of room
+      expect(dups).toBe(0)
+    },
+  )
+
+  it("allowRepeatPairs=true: foursome avoidance is still attempted but soft", () => {
+    const pozo = makePozo({
+      players: 8,
+      courts: 2,
+      matchesPerPlayer: 14, // forces partner repeats
+      algorithm: "balanced",
+      allowRepeatPairs: true,
+    })
+    const finished = simulateFullPozo(pozo, () => [3, 3])
+    expect(finished.status).toBe("finished")
+    // 28 matches → some foursome repeats are unavoidable, but algorithm should minimize them
+    const dups = countDuplicates(getFoursomes(finished.matches))
+    // C(8,4) = 70, we have 28 matches → could have repeats but minimize
+    expect(dups).toBeLessThan(14)
+  })
+})
+
+describe("algorithm × no-repeat-pairs matrix", () => {
+  it.each(["balanced", "random", "snake"] as PairingAlgorithm[])(
+    "%s + allowRepeatPairs=false: 0 partner repeats AND 0 foursome repeats",
+    (algorithm) => {
+      const pozo = makePozo({
+        players: 8,
+        courts: 2,
+        matchesPerPlayer: 7,
+        algorithm,
+        allowRepeatPairs: false,
+      })
+      const finished = simulateFullPozo(pozo, () => [
+        Math.floor(Math.random() * 6) + 1,
+        Math.floor(Math.random() * 6) + 1,
+      ])
+      expect(countDuplicates(getPartnerPairs(finished.matches))).toBe(0)
+      expect(countDuplicates(getFoursomes(finished.matches))).toBe(0)
+    },
+  )
+
+  it.each(["balanced", "random", "snake"] as PairingAlgorithm[])(
+    "%s with default config produces complete schedule",
+    (algorithm) => {
+      const pozo = makePozo({ algorithm })
+      const finished = simulateFullPozo(pozo, () => [3, 3])
+      expect(finished.status).toBe("finished")
+      expect(finished.matches.length).toBe(pozo.totalRounds * pozo.config.courts)
+    },
+  )
 })

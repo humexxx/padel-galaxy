@@ -114,16 +114,16 @@ function TeamRow({
   return (
     <div
       className={cn(
-        "flex items-center justify-between gap-3 rounded-md border bg-card px-3 py-2 transition",
+        "flex items-center justify-between gap-3 rounded-md border bg-card px-3 py-2.5 transition",
         highlight && "border-primary/60 bg-primary/5",
         dimmed && "opacity-60",
       )}
     >
-      <div className="flex min-w-0 flex-col leading-tight">
-        <span className="truncate text-sm font-medium">{players[0]}</span>
-        <span className="truncate text-xs text-muted-foreground">{players[1]}</span>
-      </div>
-      <div>{score}</div>
+      <ul className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <li className="truncate text-sm font-medium leading-tight">{players[0]}</li>
+        <li className="truncate text-sm font-medium leading-tight">{players[1]}</li>
+      </ul>
+      <div className="shrink-0">{score}</div>
     </div>
   )
 }

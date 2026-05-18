@@ -4,6 +4,7 @@ const PARTNER_REPEAT_PENALTY = 1000
 const PARTNER_REPEAT_SOFT = 4
 const OPPONENT_REPEAT_PENALTY = 10
 const SKILL_GAP_WEIGHT = 5
+const FOURSOME_REPEAT_PENALTY = 500
 
 type Combination = {
   teamA: Pair
@@ -22,9 +23,14 @@ function matchupKey(a: string, b: string): string {
   return [a, b].sort().join("~")
 }
 
+function foursomeKey(ids: string[]): string {
+  return [...ids].sort().join("#")
+}
+
 type History = {
   partnerCount: Map<string, number>
   opponentCount: Map<string, number>
+  foursomeCount: Map<string, number>
   matchesPlayed: Map<string, number>
   wins: Map<string, number>
   gamesDiff: Map<string, number>
@@ -33,6 +39,7 @@ type History = {
 export function buildHistory(matches: Match[], players: Player[]): History {
   const partnerCount = new Map<string, number>()
   const opponentCount = new Map<string, number>()
+  const foursomeCount = new Map<string, number>()
   const matchesPlayed = new Map<string, number>()
   const wins = new Map<string, number>()
   const gamesDiff = new Map<string, number>()
@@ -46,6 +53,8 @@ export function buildHistory(matches: Match[], players: Player[]): History {
   for (const match of matches) {
     const teamAIds = [match.teamA.playerA, match.teamA.playerB]
     const teamBIds = [match.teamB.playerA, match.teamB.playerB]
+    const fourKey = foursomeKey([...teamAIds, ...teamBIds])
+    foursomeCount.set(fourKey, (foursomeCount.get(fourKey) ?? 0) + 1)
 
     partnerCount.set(pairKey(match.teamA), (partnerCount.get(pairKey(match.teamA)) ?? 0) + 1)
     partnerCount.set(pairKey(match.teamB), (partnerCount.get(pairKey(match.teamB)) ?? 0) + 1)
@@ -69,7 +78,7 @@ export function buildHistory(matches: Match[], players: Player[]): History {
     }
   }
 
-  return { partnerCount, opponentCount, matchesPlayed, wins, gamesDiff }
+  return { partnerCount, opponentCount, foursomeCount, matchesPlayed, wins, gamesDiff }
 }
 
 function shuffle<T>(arr: T[]): T[] {
@@ -210,6 +219,9 @@ function groupPairsIntoMatches(
     let score = 0
     const aIds = [a.playerA, a.playerB]
     const bIds = [b.playerA, b.playerB]
+    const fKey = foursomeKey([...aIds, ...bIds])
+    const foursomeRepeats = history.foursomeCount.get(fKey) ?? 0
+    score += foursomeRepeats * FOURSOME_REPEAT_PENALTY
     for (const ai of aIds) {
       for (const bi of bIds) {
         score += (history.opponentCount.get(matchupKey(ai, bi)) ?? 0) * OPPONENT_REPEAT_PENALTY
@@ -313,6 +325,8 @@ function planRound(
         : (repA + repB) * PARTNER_REPEAT_PENALTY
       const aIds = [m.teamA.playerA, m.teamA.playerB]
       const bIds = [m.teamB.playerA, m.teamB.playerB]
+      const fKey = foursomeKey([...aIds, ...bIds])
+      score += (history.foursomeCount.get(fKey) ?? 0) * FOURSOME_REPEAT_PENALTY
       for (const a of aIds) {
         for (const b of bIds) {
           score += (history.opponentCount.get(matchupKey(a, b)) ?? 0) * OPPONENT_REPEAT_PENALTY

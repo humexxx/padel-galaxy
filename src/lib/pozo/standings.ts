@@ -3,6 +3,13 @@ import type { Match, Player, PlayerStanding } from "./types"
 const WIN_POINTS = 3
 const TIE_POINTS = 1
 
+export type StandingsSort = "games" | "points"
+
+export const STANDINGS_SORT_LABELS: Record<StandingsSort, string> = {
+  games: "Por games",
+  points: "Por puntos",
+}
+
 export function computeStandings(players: Player[], matches: Match[]): PlayerStanding[] {
   const standings = new Map<string, PlayerStanding>()
   for (const p of players) {
@@ -56,10 +63,28 @@ export function computeStandings(players: Player[], matches: Match[]): PlayerSta
     }
   }
 
-  return [...standings.values()].sort((a, b) => {
-    if (b.points !== a.points) return b.points - a.points
-    if (b.gamesDiff !== a.gamesDiff) return b.gamesDiff - a.gamesDiff
-    if (b.gamesWon !== a.gamesWon) return b.gamesWon - a.gamesWon
-    return a.player.name.localeCompare(b.player.name)
-  })
+  return [...standings.values()]
+}
+
+export function sortStandings(
+  standings: PlayerStanding[],
+  by: StandingsSort,
+): PlayerStanding[] {
+  const copy = [...standings]
+  if (by === "points") {
+    copy.sort((a, b) => {
+      if (b.points !== a.points) return b.points - a.points
+      if (b.gamesDiff !== a.gamesDiff) return b.gamesDiff - a.gamesDiff
+      if (b.gamesWon !== a.gamesWon) return b.gamesWon - a.gamesWon
+      return a.player.name.localeCompare(b.player.name)
+    })
+  } else {
+    copy.sort((a, b) => {
+      if (b.gamesWon !== a.gamesWon) return b.gamesWon - a.gamesWon
+      if (b.gamesDiff !== a.gamesDiff) return b.gamesDiff - a.gamesDiff
+      if (b.points !== a.points) return b.points - a.points
+      return a.player.name.localeCompare(b.player.name)
+    })
+  }
+  return copy
 }

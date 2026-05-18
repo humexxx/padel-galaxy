@@ -41,7 +41,7 @@ import {
   recordMatchResult,
   startPozo,
 } from "@/lib/pozo/factory"
-import { computeStandings } from "@/lib/pozo/standings"
+import { computeStandings, sortStandings } from "@/lib/pozo/standings"
 import type { Pozo } from "@/lib/pozo/types"
 
 type UpdaterFn = (current: Pozo) => Pozo
@@ -286,6 +286,7 @@ function PozoDraftView({
 function FinishedView({ pozo, onBack }: { pozo: Pozo; onBack: () => void }) {
   const router = useRouter()
   const standings = computeStandings(pozo.players, pozo.matches)
+  const podiumStandings = sortStandings(standings, "games")
   const playerById = React.useMemo(
     () => new Map(pozo.players.map((p) => [p.id, p])),
     [pozo.players],
@@ -304,7 +305,7 @@ function FinishedView({ pozo, onBack }: { pozo: Pozo; onBack: () => void }) {
               partidos jugados
             </p>
           </div>
-          <Podium standings={standings} />
+          <Podium standings={podiumStandings} />
         </CardContent>
       </Card>
 

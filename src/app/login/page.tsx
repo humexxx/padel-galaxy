@@ -24,11 +24,12 @@ export default function LoginPage() {
       </div>
       <div className="relative hidden bg-[#0b0820] lg:block">
         <Image
-          src="/login-bg.jpg"
+          src="/login-bg.svg"
           alt="Padel Galaxy"
           fill
           priority
           sizes="50vw"
+          unoptimized
           className="object-cover"
         />
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent p-10">

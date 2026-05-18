@@ -36,7 +36,8 @@ const ALGORITHM_OPTIONS: { value: PairingAlgorithm; label: string; description: 
   },
 ]
 
-const MIN_PLAYERS = 4
+const MIN_PLAYERS = 8
+const MIN_COURTS = 2
 
 function defaultPlayerNames(courts: number): string[] {
   const count = Math.max(MIN_PLAYERS, courts * 4)
@@ -160,11 +161,15 @@ export function PozoForm() {
                 <Input
                   id="courts"
                   type="number"
-                  min={1}
+                  min={MIN_COURTS}
                   max={8}
                   inputMode="numeric"
                   value={courts}
-                  onChange={(e) => setCourtsAndAdjustPlayers(Math.max(1, Number(e.target.value) || 1))}
+                  onChange={(e) =>
+                    setCourtsAndAdjustPlayers(
+                      Math.max(MIN_COURTS, Number(e.target.value) || MIN_COURTS),
+                    )
+                  }
                 />
               </Field>
               <Field>

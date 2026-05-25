@@ -6,6 +6,7 @@ import { LoginPage } from "@/routes/login"
 import { PozosPage } from "@/routes/pozos"
 import { NuevoPozoPage } from "@/routes/pozo-nuevo"
 import { PozoDetailPage } from "@/routes/pozo-detail"
+import { HistorialPage } from "@/routes/historial"
 import { AdminPage } from "@/routes/admin"
 import { NotFoundPage } from "@/routes/not-found"
 import { RequireAuth, RequireAdmin, RedirectIfAuthed } from "@/components/route-guards"
@@ -36,6 +37,7 @@ export const router = createBrowserRouter([
           { path: "/pozos", element: <PozosPage /> },
           { path: "/pozos/nuevo", element: <NuevoPozoPage /> },
           { path: "/pozos/:id", element: <PozoDetailPage /> },
+          { path: "/historial", element: <HistorialPage /> },
         ],
       },
       {

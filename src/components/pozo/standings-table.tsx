@@ -43,8 +43,8 @@ export function StandingsTable({
           <CardTitle className="text-base">Tabla de posiciones</CardTitle>
           <p className="mt-1 text-xs text-muted-foreground">
             {activeGames
-              ? "Ordenado por games ganados."
-              : "Estilo fútbol: PG → cara a cara → diferencia."}
+              ? "Ordenado por suma de games ganados."
+              : "PG → diferencia de games → cara a cara."}
           </p>
         </div>
         <Tabs

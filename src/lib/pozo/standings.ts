@@ -100,18 +100,15 @@ export function headToHeadScore(
 
 function sortByGames(a: PlayerStanding, b: PlayerStanding): number {
   if (b.gamesWon !== a.gamesWon) return b.gamesWon - a.gamesWon
-  if (b.gamesDiff !== a.gamesDiff) return b.gamesDiff - a.gamesDiff
-  if (b.matchesWon !== a.matchesWon) return b.matchesWon - a.matchesWon
   return a.player.name.localeCompare(b.player.name)
 }
 
 /**
  * Football-style standings:
- *   1) matches won
- *   2) head-to-head among tied players (looked up from `matches`)
- *   3) games difference
- *   4) games won
- *   5) name (alphabetical, stable)
+ *   1) matches won (PG)
+ *   2) games difference (DIF)
+ *   3) head-to-head among players still tied
+ *   4) name (alphabetical, stable)
  */
 function sortByPoints(
   standings: PlayerStanding[],
@@ -120,15 +117,23 @@ function sortByPoints(
   const initial = [...standings].sort((a, b) => {
     if (b.matchesWon !== a.matchesWon) return b.matchesWon - a.matchesWon
     if (b.gamesDiff !== a.gamesDiff) return b.gamesDiff - a.gamesDiff
-    if (b.gamesWon !== a.gamesWon) return b.gamesWon - a.gamesWon
     return a.player.name.localeCompare(b.player.name)
   })
 
+  // Group players who tie on BOTH matchesWon AND gamesDiff — these are the
+  // only groups where head-to-head can still change the order.
   const groups: PlayerStanding[][] = []
   for (const s of initial) {
     const last = groups[groups.length - 1]
-    if (last && last[0].matchesWon === s.matchesWon) last.push(s)
-    else groups.push([s])
+    if (
+      last &&
+      last[0].matchesWon === s.matchesWon &&
+      last[0].gamesDiff === s.gamesDiff
+    ) {
+      last.push(s)
+    } else {
+      groups.push([s])
+    }
   }
 
   for (const group of groups) {
@@ -142,8 +147,6 @@ function sortByPoints(
       const ha = h2h.get(a.player.id) ?? 0
       const hb = h2h.get(b.player.id) ?? 0
       if (hb !== ha) return hb - ha
-      if (b.gamesDiff !== a.gamesDiff) return b.gamesDiff - a.gamesDiff
-      if (b.gamesWon !== a.gamesWon) return b.gamesWon - a.gamesWon
       return a.player.name.localeCompare(b.player.name)
     })
   }

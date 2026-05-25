@@ -1,10 +1,7 @@
 import * as React from "react"
-import { CheckIcon, PencilIcon } from "lucide-react"
-import { toast } from "sonner"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import type { Match, Player } from "@/lib/pozo/types"
@@ -16,11 +13,22 @@ type Props = {
   readOnly?: boolean
 }
 
+function parseScore(value: string): number | null {
+  const n = Number.parseInt(value, 10)
+  if (!Number.isFinite(n) || n < 0) return null
+  return n
+}
+
 export function MatchCard({ match, playerById, onSubmit, readOnly }: Props) {
   const hasResult = match.gamesA !== null && match.gamesB !== null
-  const [editing, setEditing] = React.useState(!hasResult)
   const [gamesA, setGamesA] = React.useState(match.gamesA?.toString() ?? "")
   const [gamesB, setGamesB] = React.useState(match.gamesB?.toString() ?? "")
+
+  // Sync local state when the match updates from outside (Firestore subscription).
+  React.useEffect(() => {
+    setGamesA(match.gamesA?.toString() ?? "")
+    setGamesB(match.gamesB?.toString() ?? "")
+  }, [match.gamesA, match.gamesB])
 
   const teamAWon =
     match.gamesA !== null && match.gamesB !== null && match.gamesA > match.gamesB
@@ -29,15 +37,12 @@ export function MatchCard({ match, playerById, onSubmit, readOnly }: Props) {
 
   const playerName = (id: string) => playerById.get(id)?.name ?? "—"
 
-  function commit() {
-    const a = Number.parseInt(gamesA, 10)
-    const b = Number.parseInt(gamesB, 10)
-    if (!Number.isFinite(a) || !Number.isFinite(b) || a < 0 || b < 0) {
-      toast.error("Ingresá un puntaje válido")
-      return
-    }
+  function maybeSave(nextA: string, nextB: string) {
+    const a = parseScore(nextA)
+    const b = parseScore(nextB)
+    if (a === null || b === null) return
+    if (a === match.gamesA && b === match.gamesB) return
     onSubmit(match.id, a, b)
-    setEditing(false)
   }
 
   return (
@@ -46,18 +51,9 @@ export function MatchCard({ match, playerById, onSubmit, readOnly }: Props) {
         <CardTitle className="text-sm font-medium text-muted-foreground">
           Cancha {match.court}
         </CardTitle>
-        {hasResult && !editing ? (
-          <div className="flex items-center gap-1">
-            <Badge variant="secondary">Cargado</Badge>
-            {!readOnly && (
-              <Button size="icon" variant="ghost" className="size-7" onClick={() => setEditing(true)} aria-label="Editar resultado">
-                <PencilIcon className="size-3.5" />
-              </Button>
-            )}
-          </div>
-        ) : (
-          <Badge variant="outline">Pendiente</Badge>
-        )}
+        <Badge variant={hasResult ? "secondary" : "outline"}>
+          {hasResult ? "Cargado" : "Pendiente"}
+        </Badge>
       </CardHeader>
       <CardContent className="space-y-3">
         <TeamRow
@@ -65,10 +61,15 @@ export function MatchCard({ match, playerById, onSubmit, readOnly }: Props) {
           dimmed={teamBWon}
           players={[playerName(match.teamA.playerA), playerName(match.teamA.playerB)]}
           score={
-            editing && !readOnly ? (
-              <ScoreInput value={gamesA} onChange={setGamesA} aria-label="Games equipo A" />
-            ) : (
+            readOnly ? (
               <ScoreDisplay value={match.gamesA} />
+            ) : (
+              <ScoreInput
+                value={gamesA}
+                onChange={setGamesA}
+                onBlur={() => maybeSave(gamesA, gamesB)}
+                aria-label="Games equipo A"
+              />
             )
           }
         />
@@ -80,19 +81,18 @@ export function MatchCard({ match, playerById, onSubmit, readOnly }: Props) {
           dimmed={teamAWon}
           players={[playerName(match.teamB.playerA), playerName(match.teamB.playerB)]}
           score={
-            editing && !readOnly ? (
-              <ScoreInput value={gamesB} onChange={setGamesB} aria-label="Games equipo B" />
-            ) : (
+            readOnly ? (
               <ScoreDisplay value={match.gamesB} />
+            ) : (
+              <ScoreInput
+                value={gamesB}
+                onChange={setGamesB}
+                onBlur={() => maybeSave(gamesA, gamesB)}
+                aria-label="Games equipo B"
+              />
             )
           }
         />
-        {editing && !readOnly && (
-          <Button size="sm" className="w-full" onClick={commit}>
-            <CheckIcon className="size-4" />
-            Guardar resultado
-          </Button>
-        )}
       </CardContent>
     </Card>
   )
@@ -129,11 +129,13 @@ function TeamRow({
 function ScoreInput({
   value,
   onChange,
+  onBlur,
   ...rest
 }: {
   value: string
   onChange: (v: string) => void
-} & Omit<React.ComponentProps<"input">, "value" | "onChange">) {
+  onBlur: () => void
+} & Omit<React.ComponentProps<"input">, "value" | "onChange" | "onBlur">) {
   return (
     <Input
       type="number"
@@ -142,6 +144,7 @@ function ScoreInput({
       max={99}
       value={value}
       onChange={(e) => onChange(e.target.value)}
+      onBlur={onBlur}
       className="h-10 w-14 text-center text-lg font-semibold tabular-nums"
       {...rest}
     />

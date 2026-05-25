@@ -1,5 +1,3 @@
-"use client"
-
 import * as React from "react"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -14,30 +12,53 @@ import {
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
 import { sortStandings, type StandingsSort } from "@/lib/pozo/standings"
-import type { PlayerStanding } from "@/lib/pozo/types"
+import type { Match, PlayerStanding } from "@/lib/pozo/types"
 
 type Props = {
   standings: PlayerStanding[]
+  matches: Match[]
   highlightTop?: number
   defaultSort?: StandingsSort
 }
 
 export function StandingsTable({
   standings,
+  matches,
   highlightTop = 3,
   defaultSort = "games",
 }: Props) {
   const [sort, setSort] = React.useState<StandingsSort>(defaultSort)
-  const sorted = React.useMemo(() => sortStandings(standings, sort), [standings, sort])
+  const sorted = React.useMemo(
+    () => sortStandings(standings, sort, matches),
+    [standings, sort, matches],
+  )
+
+  const activeGames = sort === "games"
+  const activePoints = sort === "points"
 
   return (
     <Card className="overflow-hidden">
       <CardHeader className="flex flex-col gap-3 pb-3 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
-        <CardTitle className="text-base">Tabla de posiciones</CardTitle>
-        <Tabs value={sort} onValueChange={(v) => setSort(v as StandingsSort)} className="w-full sm:w-auto">
+        <div>
+          <CardTitle className="text-base">Tabla de posiciones</CardTitle>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {activeGames
+              ? "Ordenado por games ganados."
+              : "Estilo fútbol: PG → cara a cara → diferencia."}
+          </p>
+        </div>
+        <Tabs
+          value={sort}
+          onValueChange={(v) => setSort(v as StandingsSort)}
+          className="w-full sm:w-auto"
+        >
           <TabsList className="grid w-full grid-cols-2 sm:w-auto">
-            <TabsTrigger value="games" className="text-xs">Por games</TabsTrigger>
-            <TabsTrigger value="points" className="text-xs">Por puntos</TabsTrigger>
+            <TabsTrigger value="games" className="text-xs">
+              Por games
+            </TabsTrigger>
+            <TabsTrigger value="points" className="text-xs">
+              Por puntos
+            </TabsTrigger>
           </TabsList>
         </Tabs>
       </CardHeader>
@@ -48,17 +69,20 @@ export function StandingsTable({
               <TableHead className="w-10 pl-4">#</TableHead>
               <TableHead>Jugador</TableHead>
               <TableHead className="text-center">PJ</TableHead>
-              <TableHead className={cn("text-center", sort === "points" && "text-foreground")}>
+              <TableHead className={cn("text-center", activePoints && "text-foreground")}>
                 PG
               </TableHead>
-              <TableHead className={cn("hidden text-center sm:table-cell", sort === "games" && "text-foreground")}>
+              <TableHead
+                className={cn(
+                  "hidden text-center sm:table-cell",
+                  activeGames && "text-foreground",
+                )}
+              >
                 GF
               </TableHead>
               <TableHead className="hidden text-center sm:table-cell">GC</TableHead>
               <TableHead className="text-center">DIF</TableHead>
-              <TableHead className={cn("pr-4 text-right", sort === "points" && "text-foreground")}>
-                Pts
-              </TableHead>
+              <TableHead className="pr-4 text-right">Pts</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -72,7 +96,7 @@ export function StandingsTable({
                 <TableCell
                   className={cn(
                     "text-center tabular-nums",
-                    sort === "points" && "font-semibold",
+                    activePoints && "font-semibold text-foreground",
                   )}
                 >
                   {s.matchesWon}
@@ -80,7 +104,7 @@ export function StandingsTable({
                 <TableCell
                   className={cn(
                     "hidden text-center tabular-nums text-muted-foreground sm:table-cell",
-                    sort === "games" && "font-semibold text-foreground",
+                    activeGames && "font-semibold text-foreground",
                   )}
                 >
                   {s.gamesWon}
@@ -97,12 +121,7 @@ export function StandingsTable({
                 >
                   {s.gamesDiff > 0 ? `+${s.gamesDiff}` : s.gamesDiff}
                 </TableCell>
-                <TableCell
-                  className={cn(
-                    "pr-4 text-right tabular-nums",
-                    sort === "points" ? "font-semibold" : "text-muted-foreground",
-                  )}
-                >
+                <TableCell className="pr-4 text-right tabular-nums text-muted-foreground">
                   {s.points}
                 </TableCell>
               </TableRow>

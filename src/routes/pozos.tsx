@@ -1,6 +1,4 @@
-"use client"
-
-import Link from "next/link"
+import { Link } from "react-router"
 import { PlusIcon, Trophy } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -8,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { PozoCard } from "@/components/pozo/pozo-card"
 import { usePozos } from "@/hooks/use-pozos"
 
-export default function PozosPage() {
+export function PozosPage() {
   const { pozos, hydrated, remove } = usePozos()
 
   return (
@@ -21,7 +19,7 @@ export default function PozosPage() {
           </p>
         </div>
         <Button asChild size="lg" className="sm:size-auto">
-          <Link href="/pozos/nuevo">
+          <Link to="/pozos/nuevo">
             <PlusIcon className="size-4" />
             Crear pozo
           </Link>
@@ -64,7 +62,7 @@ function EmptyState() {
           </p>
         </div>
         <Button asChild>
-          <Link href="/pozos/nuevo">
+          <Link to="/pozos/nuevo">
             <PlusIcon className="size-4" />
             Crear el primero
           </Link>

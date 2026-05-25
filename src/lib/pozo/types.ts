@@ -33,6 +33,7 @@ export type PozoConfig = {
 
 export type Pozo = {
   id: string
+  ownerId: string
   name: string
   createdAt: number
   status: PozoStatus

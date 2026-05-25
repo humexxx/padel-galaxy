@@ -1,5 +1,3 @@
-"use client"
-
 import * as React from "react"
 
 export function useNow(intervalMs: number = 1000) {

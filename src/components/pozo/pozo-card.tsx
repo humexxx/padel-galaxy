@@ -1,6 +1,4 @@
-"use client"
-
-import Link from "next/link"
+import { Link } from "react-router"
 import { CalendarIcon, Trash2Icon, UsersIcon } from "lucide-react"
 import { toast } from "sonner"
 
@@ -47,7 +45,7 @@ export function PozoCard({ pozo, onDelete }: Props) {
       </CardContent>
       <CardFooter className="justify-between gap-2">
         <Button asChild size="sm" className="flex-1">
-          <Link href={`/pozos/${pozo.id}`}>
+          <Link to={`/pozos/${pozo.id}`}>
             {pozo.status === "draft"
               ? "Iniciar"
               : pozo.status === "finished"

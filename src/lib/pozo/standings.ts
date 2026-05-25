@@ -66,25 +66,96 @@ export function computeStandings(players: Player[], matches: Match[]): PlayerSta
   return [...standings.values()]
 }
 
-export function sortStandings(
+/**
+ * Sum of head-to-head deltas for `playerId` versus everyone in `others`.
+ * +1 each time the player's team beats a team that contained someone in `others`.
+ * -1 for the reverse. 0 on ties. Counts every "in-set opponent" separately
+ * (so a match against 2 in-set opponents at once counts double).
+ */
+export function headToHeadScore(
+  matches: Match[],
+  playerId: string,
+  others: Set<string>,
+): number {
+  let score = 0
+  for (const m of matches) {
+    if (m.gamesA === null || m.gamesB === null) continue
+    const aIds = [m.teamA.playerA, m.teamA.playerB]
+    const bIds = [m.teamB.playerA, m.teamB.playerB]
+    const onA = aIds.includes(playerId)
+    const onB = bIds.includes(playerId)
+    if (!onA && !onB) continue
+
+    const opponents = onA ? bIds : aIds
+    const opponentsInSet = opponents.filter((id) => others.has(id))
+    if (opponentsInSet.length === 0) continue
+
+    const myTeamWon = onA ? m.gamesA > m.gamesB : m.gamesB > m.gamesA
+    const tied = m.gamesA === m.gamesB
+    if (myTeamWon) score += opponentsInSet.length
+    else if (!tied) score -= opponentsInSet.length
+  }
+  return score
+}
+
+function sortByGames(a: PlayerStanding, b: PlayerStanding): number {
+  if (b.gamesWon !== a.gamesWon) return b.gamesWon - a.gamesWon
+  if (b.gamesDiff !== a.gamesDiff) return b.gamesDiff - a.gamesDiff
+  if (b.matchesWon !== a.matchesWon) return b.matchesWon - a.matchesWon
+  return a.player.name.localeCompare(b.player.name)
+}
+
+/**
+ * Football-style standings:
+ *   1) matches won
+ *   2) head-to-head among tied players (looked up from `matches`)
+ *   3) games difference
+ *   4) games won
+ *   5) name (alphabetical, stable)
+ */
+function sortByPoints(
   standings: PlayerStanding[],
-  by: StandingsSort,
+  matches: Match[],
 ): PlayerStanding[] {
-  const copy = [...standings]
-  if (by === "points") {
-    copy.sort((a, b) => {
-      if (b.points !== a.points) return b.points - a.points
+  const initial = [...standings].sort((a, b) => {
+    if (b.matchesWon !== a.matchesWon) return b.matchesWon - a.matchesWon
+    if (b.gamesDiff !== a.gamesDiff) return b.gamesDiff - a.gamesDiff
+    if (b.gamesWon !== a.gamesWon) return b.gamesWon - a.gamesWon
+    return a.player.name.localeCompare(b.player.name)
+  })
+
+  const groups: PlayerStanding[][] = []
+  for (const s of initial) {
+    const last = groups[groups.length - 1]
+    if (last && last[0].matchesWon === s.matchesWon) last.push(s)
+    else groups.push([s])
+  }
+
+  for (const group of groups) {
+    if (group.length <= 1) continue
+    const groupIds = new Set(group.map((s) => s.player.id))
+    const h2h = new Map<string, number>()
+    for (const s of group) {
+      h2h.set(s.player.id, headToHeadScore(matches, s.player.id, groupIds))
+    }
+    group.sort((a, b) => {
+      const ha = h2h.get(a.player.id) ?? 0
+      const hb = h2h.get(b.player.id) ?? 0
+      if (hb !== ha) return hb - ha
       if (b.gamesDiff !== a.gamesDiff) return b.gamesDiff - a.gamesDiff
       if (b.gamesWon !== a.gamesWon) return b.gamesWon - a.gamesWon
-      return a.player.name.localeCompare(b.player.name)
-    })
-  } else {
-    copy.sort((a, b) => {
-      if (b.gamesWon !== a.gamesWon) return b.gamesWon - a.gamesWon
-      if (b.gamesDiff !== a.gamesDiff) return b.gamesDiff - a.gamesDiff
-      if (b.points !== a.points) return b.points - a.points
       return a.player.name.localeCompare(b.player.name)
     })
   }
-  return copy
+
+  return groups.flat()
+}
+
+export function sortStandings(
+  standings: PlayerStanding[],
+  by: StandingsSort,
+  matches: Match[] = [],
+): PlayerStanding[] {
+  if (by === "points") return sortByPoints(standings, matches)
+  return [...standings].sort(sortByGames)
 }

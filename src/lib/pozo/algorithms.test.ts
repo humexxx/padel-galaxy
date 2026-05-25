@@ -23,6 +23,7 @@ function makePozo(opts: {
   const courts = opts.courts ?? 2
   return createPozo({
     name: "Test",
+    ownerId: "test-owner",
     players: playerNames(players),
     config: {
       courts,
@@ -475,6 +476,7 @@ describe("stress / edge cases", () => {
     }
     const pozo: Pozo = {
       id: "test",
+      ownerId: "test-owner",
       name: "snake-test",
       createdAt: Date.now(),
       status: "playing",

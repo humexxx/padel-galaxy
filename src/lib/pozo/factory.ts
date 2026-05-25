@@ -14,6 +14,7 @@ export function createPozo(input: {
   name: string
   players: string[]
   config: PozoConfig
+  ownerId: string
 }): Pozo {
   const players: Player[] = input.players.map((name) => ({
     id: crypto.randomUUID(),
@@ -26,6 +27,7 @@ export function createPozo(input: {
   )
   return {
     id: crypto.randomUUID(),
+    ownerId: input.ownerId,
     name: input.name.trim() || "Pozo sin nombre",
     createdAt: Date.now(),
     status: "draft",

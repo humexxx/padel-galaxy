@@ -1,5 +1,3 @@
-import Image from "next/image"
-
 import { cn } from "@/lib/utils"
 
 type Props = {
@@ -27,12 +25,11 @@ export function BrandLogo({ className, showWordmark = true }: Props) {
 
 export function LogoMark({ className }: { className?: string }) {
   return (
-    <Image
+    <img
       src="/logo-mark.png"
       alt="Padel Galaxy"
       width={64}
       height={64}
-      priority
       className={cn("rounded-full select-none", className)}
     />
   )

@@ -1,53 +1,66 @@
+import {
+  collection,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  orderBy,
+  query,
+  setDoc,
+  updateDoc,
+  where,
+  type Unsubscribe,
+} from "firebase/firestore"
+
+import { db } from "@/lib/firebase"
 import type { Pozo } from "@/lib/pozo/types"
 
-const KEY = "padel-galaxy:pozos"
+const COLLECTION = "pozos"
 
-function safeWindow(): Window | null {
-  return typeof window === "undefined" ? null : window
+function pozoDoc(id: string) {
+  return doc(db, COLLECTION, id)
 }
 
-function readAll(): Pozo[] {
-  const w = safeWindow()
-  if (!w) return []
-  try {
-    const raw = w.localStorage.getItem(KEY)
-    if (!raw) return []
-    const parsed = JSON.parse(raw) as Pozo[]
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
-  }
+export function subscribeUserPozos(
+  ownerId: string,
+  onData: (pozos: Pozo[]) => void,
+  onError?: (err: Error) => void,
+): Unsubscribe {
+  const q = query(
+    collection(db, COLLECTION),
+    where("ownerId", "==", ownerId),
+    orderBy("createdAt", "desc"),
+  )
+  return onSnapshot(
+    q,
+    (snap) => {
+      onData(snap.docs.map((d) => d.data() as Pozo))
+    },
+    onError,
+  )
 }
 
-function writeAll(pozos: Pozo[]): void {
-  const w = safeWindow()
-  if (!w) return
-  w.localStorage.setItem(KEY, JSON.stringify(pozos))
+export function subscribePozo(
+  id: string,
+  onData: (pozo: Pozo | null) => void,
+  onError?: (err: Error) => void,
+): Unsubscribe {
+  return onSnapshot(
+    pozoDoc(id),
+    (snap) => {
+      onData(snap.exists() ? (snap.data() as Pozo) : null)
+    },
+    onError,
+  )
 }
 
-export const pozoStorage = {
-  list(): Pozo[] {
-    return readAll().sort((a, b) => b.createdAt - a.createdAt)
-  },
-  get(id: string): Pozo | null {
-    return readAll().find((p) => p.id === id) ?? null
-  },
-  save(pozo: Pozo): void {
-    const all = readAll()
-    const idx = all.findIndex((p) => p.id === pozo.id)
-    if (idx >= 0) all[idx] = pozo
-    else all.push(pozo)
-    writeAll(all)
-  },
-  remove(id: string): void {
-    writeAll(readAll().filter((p) => p.id !== id))
-  },
+export async function savePozo(pozo: Pozo): Promise<void> {
+  await setDoc(pozoDoc(pozo.id), pozo)
 }
 
-export const STORAGE_EVENT = "padel-galaxy:pozos-updated"
+export async function patchPozo(id: string, patch: Partial<Pozo>): Promise<void> {
+  await updateDoc(pozoDoc(id), patch)
+}
 
-export function emitPozosUpdated(): void {
-  const w = safeWindow()
-  if (!w) return
-  w.dispatchEvent(new CustomEvent(STORAGE_EVENT))
+export async function removePozo(id: string): Promise<void> {
+  await deleteDoc(pozoDoc(id))
 }

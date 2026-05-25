@@ -1,7 +1,5 @@
-"use client"
-
 import * as React from "react"
-import { useRouter } from "next/navigation"
+import { useNavigate } from "react-router"
 import { ArrowLeftIcon, PlusIcon, Trash2Icon, UsersIcon } from "lucide-react"
 import { toast } from "sonner"
 
@@ -13,9 +11,10 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
+import { useAuth } from "@/contexts/auth-context"
 import { computeTotalRounds, defaultMatchesPerPlayer } from "@/lib/pozo/algorithms"
 import { DEFAULT_CONFIG, createPozo, computeMatchDurationMin } from "@/lib/pozo/factory"
-import { pozoStorage, emitPozosUpdated } from "@/lib/storage"
+import { savePozo } from "@/lib/storage"
 import type { PairingAlgorithm } from "@/lib/pozo/types"
 
 const ALGORITHM_OPTIONS: { value: PairingAlgorithm; label: string; description: string }[] = [
@@ -45,7 +44,8 @@ function defaultPlayerNames(courts: number): string[] {
 }
 
 export function PozoForm() {
-  const router = useRouter()
+  const navigate = useNavigate()
+  const { user } = useAuth()
   const [name, setName] = React.useState(() => {
     const d = new Date()
     return `Pozo ${d.toLocaleDateString("es-AR", { day: "2-digit", month: "short" })}`
@@ -59,6 +59,7 @@ export function PozoForm() {
   const [warmupMin, setWarmupMin] = React.useState<number>(DEFAULT_CONFIG.warmupMin)
   const [algorithm, setAlgorithm] = React.useState<PairingAlgorithm>(DEFAULT_CONFIG.algorithm)
   const [allowRepeatPairs, setAllowRepeatPairs] = React.useState<boolean>(DEFAULT_CONFIG.allowRepeatPairs)
+  const [submitting, setSubmitting] = React.useState(false)
 
   const validPlayers = players.map((p) => p.trim()).filter(Boolean)
   const matchesPerPlayer =
@@ -102,15 +103,21 @@ export function PozoForm() {
     setPlayers((curr) => curr.map((p, i) => (i === index ? value : p)))
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (errors.length > 0) {
       toast.error(errors[0])
       return
     }
+    if (!user) {
+      toast.error("Tenés que iniciar sesión")
+      return
+    }
+    setSubmitting(true)
     const pozo = createPozo({
       name,
       players: validPlayers,
+      ownerId: user.uid,
       config: {
         courts,
         matchesPerPlayer,
@@ -120,16 +127,21 @@ export function PozoForm() {
         allowRepeatPairs,
       },
     })
-    pozoStorage.save(pozo)
-    emitPozosUpdated()
-    toast.success("Pozo creado")
-    router.push(`/pozos/${pozo.id}`)
+    try {
+      await savePozo(pozo)
+      toast.success("Pozo creado")
+      navigate(`/pozos/${pozo.id}`)
+    } catch (err) {
+      console.error(err)
+      toast.error("No se pudo guardar el pozo")
+      setSubmitting(false)
+    }
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="flex items-center gap-2">
-        <Button type="button" variant="ghost" size="icon" onClick={() => router.back()} aria-label="Volver">
+        <Button type="button" variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Volver">
           <ArrowLeftIcon className="size-4" />
         </Button>
         <div>
@@ -346,11 +358,11 @@ export function PozoForm() {
       )}
 
       <div className="sticky bottom-4 z-10 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
-        <Button type="button" variant="outline" onClick={() => router.back()}>
+        <Button type="button" variant="outline" onClick={() => navigate(-1)}>
           Cancelar
         </Button>
-        <Button type="submit" disabled={errors.length > 0} size="lg">
-          Crear pozo
+        <Button type="submit" disabled={errors.length > 0 || submitting} size="lg">
+          {submitting ? "Creando…" : "Crear pozo"}
         </Button>
       </div>
     </form>

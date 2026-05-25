@@ -1,8 +1,5 @@
-"use client"
-
 import * as React from "react"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { Link, useNavigate } from "react-router"
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -52,7 +49,7 @@ type Props = {
 }
 
 export function PozoView({ pozo, onUpdate }: Props) {
-  const router = useRouter()
+  const navigate = useNavigate()
   const now = useNow(1000)
   const playerById = React.useMemo(
     () => new Map(pozo.players.map((p) => [p.id, p])),
@@ -72,7 +69,7 @@ export function PozoView({ pozo, onUpdate }: Props) {
       <PozoDraftView
         pozo={pozo}
         onStart={() => onUpdate((p) => startPozo(p))}
-        onBack={() => router.push("/pozos")}
+        onBack={() => navigate("/pozos")}
       />
     )
   }
@@ -81,7 +78,7 @@ export function PozoView({ pozo, onUpdate }: Props) {
     return (
       <FinishedView
         pozo={pozo}
-        onBack={() => router.push("/pozos")}
+        onBack={() => navigate("/pozos")}
       />
     )
   }
@@ -172,7 +169,7 @@ export function PozoView({ pozo, onUpdate }: Props) {
         </TabsContent>
 
         <TabsContent value="standings" className="space-y-4">
-          <StandingsTable standings={standings} />
+          <StandingsTable standings={standings} matches={pozo.matches} />
         </TabsContent>
       </Tabs>
 
@@ -206,7 +203,7 @@ function PozoHeader({
     <div className="flex items-start justify-between gap-3">
       <div className="flex items-start gap-2">
         <Button asChild variant="ghost" size="icon" aria-label="Volver">
-          <Link href="/pozos">
+          <Link to="/pozos">
             <ArrowLeftIcon className="size-4" />
           </Link>
         </Button>
@@ -284,7 +281,7 @@ function PozoDraftView({
 }
 
 function FinishedView({ pozo, onBack }: { pozo: Pozo; onBack: () => void }) {
-  const router = useRouter()
+  const navigate = useNavigate()
   const standings = computeStandings(pozo.players, pozo.matches)
   const podiumStandings = sortStandings(standings, "games")
   const playerById = React.useMemo(
@@ -315,7 +312,7 @@ function FinishedView({ pozo, onBack }: { pozo: Pozo; onBack: () => void }) {
           <TabsTrigger value="matches">Partidos</TabsTrigger>
         </TabsList>
         <TabsContent value="standings">
-          <StandingsTable standings={standings} />
+          <StandingsTable standings={standings} matches={pozo.matches} />
         </TabsContent>
         <TabsContent value="matches" className="space-y-4">
           {Array.from({ length: pozo.totalRounds }).map((_, roundIndex) => {
@@ -344,7 +341,7 @@ function FinishedView({ pozo, onBack }: { pozo: Pozo; onBack: () => void }) {
       </Tabs>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-        <Button variant="outline" onClick={() => router.push("/pozos/nuevo")}>
+        <Button variant="outline" onClick={() => navigate("/pozos/nuevo")}>
           <RotateCcwIcon className="size-4" />
           Crear otro pozo
         </Button>

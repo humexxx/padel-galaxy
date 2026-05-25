@@ -1,0 +1,28 @@
+# Deploys https://padel-galaxy-1c7a2.web.app on push to main.
+# Firestore rules/indexes are NOT touched here — deploy them locally with
+# `npm run deploy-rules` (or `firebase deploy --only firestore`) when they
+# change. The CI service account doesn't have firestore admin roles.
+
+name: Deploy to Firebase Hosting on merge
+on:
+  push:
+    branches:
+      - main
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_PADEL_GALAXY_1C7A2 }}
+          channelId: live
+          projectId: padel-galaxy-1c7a2

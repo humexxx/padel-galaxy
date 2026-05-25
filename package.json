@@ -11,6 +11,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "set-admin": "node scripts/set-admin.mjs",
+    "deploy-rules": "node scripts/deploy-rules.mjs",
     "deploy": "npm run build && firebase deploy"
   },
   "dependencies": {

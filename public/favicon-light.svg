@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Light theme favicon: light badge + dark ring + emerald ball.
+       Use this when the app explicitly forces light mode and you want
+       the tab icon locked to the light variant instead of following
+       the OS preference. -->
+  <rect fill="#fafafa" width="32" height="32" rx="7" />
+  <ellipse
+    cx="16"
+    cy="16"
+    rx="12"
+    ry="4.2"
+    fill="none"
+    stroke="#0a0a0a"
+    stroke-width="1.8"
+    stroke-linecap="round"
+    opacity="0.6"
+    transform="rotate(-22 16 16)"
+  />
+  <circle fill="#10b981" cx="16" cy="16" r="5.4" />
+</svg>

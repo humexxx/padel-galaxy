@@ -1,32 +1,62 @@
 import {
+  ChartLineIcon,
   ClockIcon,
+  CloudIcon,
+  FolderKanbanIcon,
+  ScaleIcon,
   ShuffleIcon,
   TrophyIcon,
-  UsersIcon,
+  UserPlusIcon,
 } from "lucide-react"
 
 import { Heading } from "@/components/ui/typography"
 
+/**
+ * Eight features in a 2×4 grid (4×1 on lg). Covers the full surface of
+ * the app — not just the single-pozo flow — so the landing reflects
+ * what's actually in the product: groups, per-player history, cloud
+ * sync, multiple algorithms, invites.
+ */
 const FEATURES = [
   {
     icon: ShuffleIcon,
     title: "Sin parejas repetidas",
-    body: "El algoritmo arma cada ronda con round-robin: vas a jugar con todos antes de repetir compañero.",
+    body: "El algoritmo arma cada ronda con round-robin: jugás con todos antes de repetir compañero.",
+  },
+  {
+    icon: ScaleIcon,
+    title: "Tres algoritmos",
+    body: "Balanceado, snake o aleatorio. Elegís cómo se arman los equipos según el grupo.",
   },
   {
     icon: ClockIcon,
-    title: "Cronómetro en pantalla",
-    body: "Calentamiento + tiempo total por partido visibles en grande. Nadie se queda mirando el reloj.",
+    title: "Cronómetro + calentamiento",
+    body: "Tiempo de calentamiento y total por partido en pantalla grande, en cuenta regresiva.",
   },
   {
     icon: TrophyIcon,
-    title: "Tabla y podio automáticos",
-    body: "Cargás games por partido y la tabla se ordena sola: estilo fútbol (PG → H2H → DIF) o por games.",
+    title: "Podio con confetti",
+    body: "Tabla ordenable por games, partidos o puntos. Al cerrar el pozo, podio 1-2-3 con confeti.",
   },
   {
-    icon: UsersIcon,
-    title: "Hasta 32 jugadores",
-    body: "Soporta rotación si tenés más jugadores que canchas. Todos juegan la misma cantidad de partidos.",
+    icon: FolderKanbanIcon,
+    title: "Pozos por grupo",
+    body: "Agrupá pozos por club, temporada o liga. Mirá estadísticas combinadas y evolución mensual.",
+  },
+  {
+    icon: ChartLineIcon,
+    title: "Historial por jugador",
+    body: "Cada jugador tiene su perfil con games, partidos ganados, puntos y posición final pozo a pozo.",
+  },
+  {
+    icon: UserPlusIcon,
+    title: "Invitá a tus jugadores",
+    body: "Mandales un email. Cuando aceptan, ven su propia evolución desde su cuenta.",
+  },
+  {
+    icon: CloudIcon,
+    title: "Sync en la nube",
+    body: "Todo se guarda en tiempo real. Cargás un resultado en el celular y aparece al toque en la tablet.",
   },
 ]
 
@@ -44,6 +74,10 @@ export function LandingFeatures() {
           <Heading level="h2" className="mt-3 text-zinc-900">
             Pensado para que solo te preocupes por jugar.
           </Heading>
+          <p className="mt-4 text-zinc-500">
+            Desde armar el primer partido hasta mirar la evolución del grupo a
+            lo largo de la temporada.
+          </p>
         </div>
 
         {/* Single 1px gap creates clean dividers between cards without

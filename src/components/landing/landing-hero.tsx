@@ -5,10 +5,15 @@ import { Heading } from "@/components/ui/typography"
 
 /**
  * Hero with the same "spotlight + grid lines" treatment used in
- * trim-success and allstars-galaxy, tinted emerald to nod at the padel
- * court palette. Below the headline, a `FauxPozoPreview` mimics a real
- * pozo dashboard so the visitor sees the product instead of a stock
- * illustration.
+ * trim-success and allstars-galaxy, tinted with the app's primary
+ * (a muted indigo, `oklch(0.55 0.10 265)` — same value as `--primary`
+ * in light mode) so the landing matches the in-app palette. We use
+ * literal oklch() instead of `var(--primary)` because the landing
+ * wrapper forces light mode but `next-themes` may still set `.dark`
+ * on `<html>`, which would flip the var.
+ *
+ * Below the headline, a `FauxPozoPreview` mimics a real pozo dashboard
+ * so the visitor sees the product instead of a stock illustration.
  */
 export function LandingHero() {
   return (
@@ -19,7 +24,7 @@ export function LandingHero() {
         className="pointer-events-none absolute inset-0 -z-0"
         style={{
           background:
-            "radial-gradient(60% 50% at 50% 0%, rgba(16,185,129,0.12) 0%, rgba(255,255,255,0) 70%)",
+            "radial-gradient(60% 50% at 50% 0%, oklch(0.55 0.10 265 / 0.14) 0%, rgba(255,255,255,0) 70%)",
         }}
       />
       {/* Grid lines, faded to the edges */}
@@ -40,8 +45,8 @@ export function LandingHero() {
           href="#features"
           className="mx-auto mb-8 inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white/70 px-3 py-1 text-xs text-zinc-600 backdrop-blur transition-colors hover:border-zinc-300 hover:text-zinc-900"
         >
-          <span className="inline-block size-1.5 rounded-full bg-emerald-500" />
-          Pozos de pádel · Americano · Mexicano
+          <span className="inline-block size-1.5 rounded-full bg-[oklch(0.55_0.10_265)]" />
+          Pozos · Grupos · Jugadores · Historial
           <ArrowRightIcon className="size-3" />
         </a>
 
@@ -52,8 +57,9 @@ export function LandingHero() {
         </Heading>
 
         <p className="mx-auto mt-6 max-w-2xl text-balance text-base text-zinc-500 sm:text-lg">
-          Programá rondas sin parejas repetidas, cronometrá los partidos y
-          rankeá automáticamente. Todo en el celular, sin papel.
+          Armá rondas sin parejas repetidas, cronometrá los partidos y rankeá
+          automáticamente. Después mirá la evolución de cada jugador y la
+          temporada completa de tu grupo.
         </p>
 
         <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
@@ -73,7 +79,7 @@ export function LandingHero() {
         </div>
 
         <p className="mt-6 text-xs text-zinc-400">
-          Sin instalar nada. Funciona en celular y desktop.
+          Sin instalar nada. Sync en la nube entre celular, tablet y desktop.
         </p>
       </div>
 
@@ -99,7 +105,7 @@ const STANDINGS = [
  */
 function FauxPozoPreview() {
   return (
-    <div className="relative overflow-hidden rounded-xl border border-zinc-200 bg-white p-1 shadow-[0_30px_120px_-20px_rgba(16,185,129,0.18)]">
+    <div className="relative overflow-hidden rounded-xl border border-zinc-200 bg-white p-1 shadow-[0_30px_120px_-20px_oklch(0.55_0.10_265/0.22)]">
       <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-6 sm:p-8">
         {/* Browser chrome */}
         <div className="mb-6 flex items-center justify-between border-b border-zinc-200 pb-4">
@@ -113,6 +119,21 @@ function FauxPozoPreview() {
           </div>
           <span className="hidden text-xs text-zinc-400 sm:inline">
             Ronda 3 de 4
+          </span>
+        </div>
+
+        {/* Breadcrumb-style tag — hints at the groups feature without
+            actually adding nav. */}
+        <div className="mb-4 flex flex-wrap items-center gap-2 text-xs">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-2.5 py-1 font-medium text-zinc-600">
+            <span className="inline-block size-1.5 rounded-full bg-zinc-400" />
+            Grupo · Club Sábado
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-[oklch(0.97_0.02_265)] px-2.5 py-1 font-medium text-[oklch(0.42_0.10_265)]">
+            Balanceado
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 font-medium text-zinc-500 ring-1 ring-zinc-200">
+            Sin parejas repetidas
           </span>
         </div>
 
@@ -158,7 +179,7 @@ function FauxPozoPreview() {
                 <span
                   className={`w-12 text-right font-mono tabular-nums ${
                     p.dif.startsWith("+")
-                      ? "text-emerald-600"
+                      ? "text-[oklch(0.5_0.10_265)]"
                       : "text-zinc-400"
                   }`}
                 >

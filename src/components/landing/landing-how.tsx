@@ -4,7 +4,7 @@ const STEPS = [
   {
     n: 1,
     title: "Creá el pozo",
-    body: "Definí canchas, jugadores, duración y algoritmo. Los partidos por jugador se calculan solos.",
+    body: "Elegís grupo (club, temporada, liga), canchas, jugadores, duración y algoritmo. El resto se calcula solo.",
   },
   {
     n: 2,
@@ -14,12 +14,12 @@ const STEPS = [
   {
     n: 3,
     title: "Cargá los resultados",
-    body: "Ingresás games al terminar cada partido. La siguiente ronda se arma con los resultados.",
+    body: "Ingresás games al terminar cada partido. La siguiente ronda se arma con los resultados — todo sincronizado en la nube.",
   },
   {
     n: 4,
-    title: "Mirá el podio",
-    body: "Al final aparece el podio 1-2-3 y la tabla completa, lista para guardarla o compartirla.",
+    title: "Mirá el podio y el historial",
+    body: "Al cerrar el pozo aparece el podio 1-2-3 con confetti. Después podés revisar la evolución de cada jugador y del grupo entero.",
   },
 ]
 

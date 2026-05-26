@@ -1,0 +1,28 @@
+{
+  // Force VS Code (and forks: Cursor, Windsurf) to use the workspace's
+  // TypeScript instead of its bundled one. React 19's @types/react@19
+  // moved the JSX namespace out of the global scope (it now lives in
+  // react/jsx-runtime + React.JSX), and older bundled TS versions
+  // surface phantom "no interface 'JSX.IntrinsicElements' exists"
+  // errors even though `tsc --noEmit` from the CLI is clean.
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+
+  // Use the editor's built-in formatter on save so Tailwind classes
+  // and TS imports stay tidy. Doesn't run a linter — just format.
+  "editor.formatOnSave": false,
+
+  // Search/file-watcher excludes: skip the heavy build artifacts.
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/dist/**": true,
+    "**/.firebase/**": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/.firebase": true,
+    "pnpm-lock.yaml": true,
+    "package-lock.json": true
+  }
+}

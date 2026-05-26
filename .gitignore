@@ -38,6 +38,7 @@ yarn-error.log*
 # IDE
 .vscode/*
 !.vscode/extensions.json
+!.vscode/settings.json
 .idea
 
 # Firebase AI / Genkit local skill cache (installed by firebase init)

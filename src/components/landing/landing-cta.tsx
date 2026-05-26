@@ -5,8 +5,8 @@ import { Heading } from "@/components/ui/typography"
 
 /**
  * Closing CTA. Mirrors the hero's spotlight treatment (radial gradient
- * + emerald tint, this time anchored at the bottom) so the page opens
- * and closes with the same visual rhyme.
+ * tinted with the app's primary indigo, anchored at the bottom) so the
+ * page opens and closes with the same visual rhyme.
  */
 export function LandingCta() {
   return (
@@ -16,7 +16,7 @@ export function LandingCta() {
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            "radial-gradient(50% 60% at 50% 100%, rgba(16,185,129,0.10) 0%, rgba(255,255,255,0) 70%)",
+            "radial-gradient(50% 60% at 50% 100%, oklch(0.55 0.10 265 / 0.12) 0%, rgba(255,255,255,0) 70%)",
         }}
       />
       <div className="relative mx-auto max-w-3xl px-4 py-28 text-center sm:px-6">
@@ -24,7 +24,8 @@ export function LandingCta() {
           Listo para armar el próximo pozo.
         </Heading>
         <p className="mt-4 text-zinc-500">
-          Probalo gratis. Tu primer pozo en menos de un minuto.
+          Probalo gratis. Tu primer pozo en menos de un minuto — y empezás a
+          construir el historial del grupo desde el día uno.
         </p>
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Link

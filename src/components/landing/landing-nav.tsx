@@ -4,6 +4,7 @@ import { ArrowRightIcon } from "lucide-react"
 const NAV_LINKS = [
   { label: "Producto", href: "#features" },
   { label: "Cómo funciona", href: "#how" },
+  { label: "Historial", href: "#stats" },
 ]
 
 export function LandingNav() {

@@ -139,3 +139,31 @@
     font-variant-numeric: tabular-nums;
   }
 }
+
+/* Shooting-star background animations. Defined globally (not inside the
+ * React component) so the keyframes don't get re-injected into <head>
+ * every time the layer mounts. */
+@keyframes shooting-star-travel {
+  0%, 100% { opacity: 0; transform: translate(0, 0); }
+  3% {
+    opacity: var(--peak);
+    transform: translate(0, 0);
+    animation-timing-function: cubic-bezier(0.215, 0.61, 0.355, 1);
+  }
+  22% { opacity: var(--peak); transform: translate(var(--dx), var(--dy)); }
+  25% { opacity: 0; transform: translate(var(--dx), var(--dy)); }
+}
+@keyframes shooting-star-shrink {
+  0%, 3% {
+    transform: scaleX(1);
+    animation-timing-function: cubic-bezier(0.215, 0.61, 0.355, 1);
+  }
+  22% { transform: scaleX(0.05); }
+  25%, 100% { transform: scaleX(0.05); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-shooting-star] {
+    animation: none !important;
+    opacity: 0 !important;
+  }
+}

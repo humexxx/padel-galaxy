@@ -9,6 +9,7 @@ import {
   SaveIcon,
   ShieldIcon,
   SlidersIcon,
+  SparklesIcon,
   Trash2Icon,
   UserIcon,
 } from "lucide-react"
@@ -35,11 +36,16 @@ import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Switch } from "@/components/ui/switch"
 import { Heading, Text } from "@/components/ui/typography"
 import { PageContainer } from "@/components/page-container"
 import { useAuth } from "@/contexts/auth-context"
 import { useUserProfile } from "@/hooks/use-user-profile"
 import { cn } from "@/lib/utils"
+import {
+  setShootingStarsEnabled,
+  useShootingStarsEnabled,
+} from "@/lib/preferences"
 import {
   deleteUserProfile,
   PREFERRED_SIDE_LABELS,
@@ -55,11 +61,12 @@ const PREFERRED_SIDE_DESCRIPTIONS: Record<PreferredSide, string> = {
 
 const SIDE_ORDER: PreferredSide[] = ["any", "reves", "drive"]
 
-type Section = "profile" | "preferences" | "privacy"
+type Section = "profile" | "preferences" | "appearance" | "privacy"
 
 const SECTION_ITEMS: { id: Section; label: string; icon: typeof UserIcon }[] = [
   { id: "profile", label: "Perfil", icon: UserIcon },
   { id: "preferences", label: "Preferencias", icon: SlidersIcon },
+  { id: "appearance", label: "Apariencia", icon: SparklesIcon },
   { id: "privacy", label: "Privacidad", icon: ShieldIcon },
 ]
 
@@ -143,6 +150,8 @@ export function SettingsPage() {
                 )
               }}
             />
+          ) : section === "appearance" ? (
+            <AppearanceSection />
           ) : (
             <form onSubmit={handleSave} className="space-y-6">
               {section === "profile" && (
@@ -467,6 +476,39 @@ function CourtSideVisual({
         />
       )}
     </svg>
+  )
+}
+
+function AppearanceSection() {
+  const enabled = useShootingStarsEnabled()
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Apariencia</CardTitle>
+        <CardDescription>
+          Detalles visuales que solo afectan este dispositivo.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Label
+          htmlFor="shooting-stars"
+          className="flex cursor-pointer items-start justify-between gap-4"
+        >
+          <div className="space-y-0.5">
+            <p className="text-sm font-medium">Estrellas fugaces</p>
+            <p className="text-xs text-muted-foreground">
+              Pequeñas estrellas que cruzan el fondo de la pantalla de tanto en
+              tanto. Desactivá si te distrae o querés ahorrar batería.
+            </p>
+          </div>
+          <Switch
+            id="shooting-stars"
+            checked={enabled}
+            onCheckedChange={(next) => setShootingStarsEnabled(next)}
+          />
+        </Label>
+      </CardContent>
+    </Card>
   )
 }
 

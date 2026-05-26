@@ -96,7 +96,7 @@ function CreatePozoCard() {
         "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none",
       )}
     >
-      <Card className="flex h-full min-h-44 flex-col items-center justify-center gap-3 border-dashed bg-transparent text-center text-muted-foreground transition-colors hover:border-foreground/30 hover:bg-muted/30 hover:text-foreground">
+      <Card className="flex h-full min-h-44 flex-col items-center justify-center gap-3 border-dashed text-center text-muted-foreground transition-colors hover:border-foreground/30 hover:bg-muted hover:text-foreground">
         <div className="flex size-10 items-center justify-center rounded-full bg-muted text-foreground">
           <PlusIcon className="size-5" />
         </div>
@@ -111,11 +111,11 @@ function CreatePozoCard() {
 
 function EmptyPozosHint() {
   return (
-    <div className="mt-4 flex flex-col items-center gap-2 rounded-xl border border-dashed bg-muted/30 px-6 py-10 text-center">
+    <div className="mt-4 flex flex-col items-center gap-2 rounded-xl border border-dashed bg-card px-6 py-10 text-center">
       <div className="rounded-full bg-primary/10 p-3 text-primary">
         <TrophyIcon className="size-6" />
       </div>
-      <Text className="text-base font-semibold">Todavía no tenés pozos activos</Text>
+      <Text className="text-base font-semibold">No tenés pozos activos</Text>
       <Text variant="muted" className="max-w-md text-sm">
         Usá la card de arriba para crear el primero. Cuando termines uno, va a aparecer en{" "}
         <Link to="/historial" className="font-medium text-foreground underline-offset-4 hover:underline">

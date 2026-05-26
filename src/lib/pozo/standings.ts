@@ -3,10 +3,11 @@ import type { Match, Player, PlayerStanding } from "./types"
 const WIN_POINTS = 3
 const TIE_POINTS = 1
 
-export type StandingsSort = "games" | "points"
+export type StandingsSort = "games" | "matchesWon" | "points"
 
 export const STANDINGS_SORT_LABELS: Record<StandingsSort, string> = {
-  games: "Por games",
+  games: "Por games ganados",
+  matchesWon: "Por partidos ganados",
   points: "Por puntos",
 }
 
@@ -16,10 +17,12 @@ export function computeStandings(players: Player[], matches: Match[]): PlayerSta
     standings.set(p.id, {
       player: p,
       matchesPlayed: 0,
+      matchesWon: 0,
+      matchesTied: 0,
+      matchesLost: 0,
       gamesWon: 0,
       gamesLost: 0,
       gamesDiff: 0,
-      matchesWon: 0,
       points: 0,
     })
   }
@@ -44,7 +47,10 @@ export function computeStandings(players: Player[], matches: Match[]): PlayerSta
         s.matchesWon += 1
         s.points += WIN_POINTS
       } else if (tied) {
+        s.matchesTied += 1
         s.points += TIE_POINTS
+      } else {
+        s.matchesLost += 1
       }
     }
     for (const id of teamBIds) {
@@ -58,7 +64,10 @@ export function computeStandings(players: Player[], matches: Match[]): PlayerSta
         s.matchesWon += 1
         s.points += WIN_POINTS
       } else if (tied) {
+        s.matchesTied += 1
         s.points += TIE_POINTS
+      } else {
+        s.matchesLost += 1
       }
     }
   }
@@ -104,30 +113,30 @@ function sortByGames(a: PlayerStanding, b: PlayerStanding): number {
 }
 
 /**
- * Football-style standings:
- *   1) matches won (PG)
+ * Football-style standings parametrized by primary key.
+ *   1) primary metric (matchesWon OR points)
  *   2) games difference (DIF)
  *   3) head-to-head among players still tied
  *   4) name (alphabetical, stable)
  */
-function sortByPoints(
+function sortByFootballStyle(
   standings: PlayerStanding[],
   matches: Match[],
+  primary: "matchesWon" | "points",
 ): PlayerStanding[] {
   const initial = [...standings].sort((a, b) => {
-    if (b.matchesWon !== a.matchesWon) return b.matchesWon - a.matchesWon
+    if (b[primary] !== a[primary]) return b[primary] - a[primary]
     if (b.gamesDiff !== a.gamesDiff) return b.gamesDiff - a.gamesDiff
     return a.player.name.localeCompare(b.player.name)
   })
 
-  // Group players who tie on BOTH matchesWon AND gamesDiff — these are the
-  // only groups where head-to-head can still change the order.
+  // Group players tied on (primary, gamesDiff) — only there can H2H change order.
   const groups: PlayerStanding[][] = []
   for (const s of initial) {
     const last = groups[groups.length - 1]
     if (
       last &&
-      last[0].matchesWon === s.matchesWon &&
+      last[0][primary] === s[primary] &&
       last[0].gamesDiff === s.gamesDiff
     ) {
       last.push(s)
@@ -159,6 +168,7 @@ export function sortStandings(
   by: StandingsSort,
   matches: Match[] = [],
 ): PlayerStanding[] {
-  if (by === "points") return sortByPoints(standings, matches)
-  return [...standings].sort(sortByGames)
+  if (by === "games") return [...standings].sort(sortByGames)
+  if (by === "matchesWon") return sortByFootballStyle(standings, matches, "matchesWon")
+  return sortByFootballStyle(standings, matches, "points")
 }

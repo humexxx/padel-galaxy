@@ -5,11 +5,36 @@ service cloud.firestore {
     function isAuth() {
       return request.auth != null;
     }
-    function isAdmin() {
-      return isAuth() && request.auth.token.admin == true;
-    }
     function isOwner(uid) {
       return isAuth() && request.auth.uid == uid;
+    }
+    // Superadmin = top tier. Token claim is set by scripts/set-superadmin.mjs.
+    // Source of truth — no Firestore lookup needed (which keeps it cheap
+    // to use inside other rules).
+    function isSuperAdminClaim() {
+      return isAuth() && request.auth.token.superadmin == true;
+    }
+    // Admin or higher. Three sources, evaluated cheap-to-expensive:
+    //   1. legacy `admin: true` custom claim (set via set-admin.mjs)
+    //   2. `superadmin: true` claim implies admin
+    //   3. /users/{uid} doc with role in {admin, superadmin}
+    //
+    // The doc lookup costs one extra read per rule eval — we accept it
+    // so admins promoted via invite (no claim) can still use the app.
+    // If perf bites us, the fallback is a Cloud Function that mirrors
+    // role → custom claim on user-doc writes.
+    function isAdmin() {
+      return isAuth() && (
+        request.auth.token.admin == true ||
+        request.auth.token.superadmin == true ||
+        (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'superadmin']
+        )
+      );
+    }
+    function normalizedAuthEmail() {
+      return request.auth.token.email.lower();
     }
 
     match /pozos/{pozoId} {
@@ -21,11 +46,112 @@ service cloud.firestore {
       allow delete: if isOwner(resource.data.ownerId) || isAdmin();
     }
 
+    // Player roster owned by an organizer. The player record IS the invite:
+    // when the organizer sends one, they stamp `invitedEmail` on the record.
+    // Read is allowed for:
+    //   - the owner (organizer) and any admin
+    //   - the linked user (once they've claimed the record)
+    //   - the invitee BEFORE linking — they need to find their own record
+    //     to claim it during sign-in (matches by request.auth.token.email)
+    match /players/{playerId} {
+      allow read: if isOwner(resource.data.ownerId)
+                  || (isAuth() && resource.data.linkedUid == request.auth.uid)
+                  || (isAuth() && resource.data.invitedEmail == normalizedAuthEmail())
+                  || isAdmin();
+      allow create: if isAuth()
+                    && request.resource.data.ownerId == request.auth.uid;
+      // Two ways to update:
+      //   1. Owner or admin can modify anything (within ownerId-stays-fixed).
+      //   2. An invited user can claim the record by setting linkedUid to
+      //      their own uid — and ONLY that field (+ invitedAt clearing).
+      //      All other fields must stay identical to prevent abuse.
+      allow update: if (
+        (isOwner(resource.data.ownerId) || isAdmin())
+        && request.resource.data.ownerId == resource.data.ownerId
+      ) || (
+        isAuth()
+        && resource.data.linkedUid == null
+        && resource.data.invitedEmail == normalizedAuthEmail()
+        && request.resource.data.linkedUid == request.auth.uid
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.name == resource.data.name
+        && request.resource.data.invitedEmail == resource.data.invitedEmail
+      );
+      allow delete: if isOwner(resource.data.ownerId) || isAdmin();
+    }
+
+    // Group is an owner-scoped label that organizes pozos. Pozos reference
+    // it via `pozo.groupId`. Same rules as players: owner or admin.
+    match /groups/{groupId} {
+      allow read: if isOwner(resource.data.ownerId) || isAdmin();
+      allow create: if isAuth()
+                    && request.resource.data.ownerId == request.auth.uid;
+      allow update: if (isOwner(resource.data.ownerId) || isAdmin())
+                    && request.resource.data.ownerId == resource.data.ownerId;
+      allow delete: if isOwner(resource.data.ownerId) || isAdmin();
+    }
+
     // App-wide settings — readable by anyone (signup flow needs to check before
-    // a user is authenticated), writable only by admins.
+    // a user is authenticated), writable only by superadmin (the toggle for
+    // open registration is sensitive).
     match /settings/{settingId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if isSuperAdminClaim();
+    }
+
+    // Per-user profile + role. Doc id = uid (trivial owner check).
+    //
+    // - read: self or any admin (admin tier needs this to render lists +
+    //         resolve linked players).
+    // - create: self only. Role is restricted: you can only create as 'player'
+    //           unless there's an invite for your email OR you have a
+    //           privileged claim already (legacy admin/superadmin).
+    // - update: self can update mirrored profile fields but NOT role.
+    //           Superadmin can update role on any doc.
+    // - delete: self only (account-deletion flow).
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+
+      allow create: if isOwner(uid)
+                    && request.resource.data.uid == uid
+                    && (
+                      request.resource.data.role == 'player'
+                      || request.auth.token.admin == true
+                      || request.auth.token.superadmin == true
+                      || (
+                        request.resource.data.role == 'admin'
+                        && exists(/databases/$(database)/documents/adminInvites/$(normalizedAuthEmail()))
+                      )
+                    );
+
+      // Self can update everything except role.
+      allow update: if (
+        isOwner(uid)
+        && request.resource.data.uid == uid
+        && request.resource.data.role == resource.data.role
+      ) || isSuperAdminClaim();
+
+      allow delete: if isOwner(uid);
+    }
+
+    // Pending invitations to become admin. Doc id = normalized (lowercased)
+    // email so each address is unique by construction.
+    //
+    // - read/write: superadmin manages these.
+    // - read/delete: the invitee can ALSO read+delete their own invite
+    //   (their email matches the doc id). The AuthProvider does this to
+    //   consume the invite during sign-in.
+    match /adminInvites/{emailId} {
+      allow read, write: if isSuperAdminClaim();
+      allow read, delete: if isAuth() && normalizedAuthEmail() == emailId;
+    }
+
+    // Mail queue read by the "Trigger Email from Firestore" extension.
+    // Auth users can ENQUEUE emails (the extension processes & deletes them).
+    // No one can read back what was queued — the extension uses admin SDK.
+    match /mail/{mailId} {
+      allow create: if isAuth();
+      allow read, update, delete: if false;
     }
 
     match /{document=**} {

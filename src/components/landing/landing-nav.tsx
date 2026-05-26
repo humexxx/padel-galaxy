@@ -16,11 +16,11 @@ export function LandingNav() {
             className="flex items-center gap-2 text-[15px] font-semibold tracking-tight text-zinc-900"
           >
             <img
-              src="/logo-mark.png"
+              src="/favicon.svg"
               alt=""
               width={24}
               height={24}
-              className="rounded-full"
+              className="select-none"
             />
             Padel Galaxy
           </Link>

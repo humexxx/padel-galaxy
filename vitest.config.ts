@@ -8,7 +8,13 @@ export default defineConfig({
     },
   },
   test: {
+    // Default to Node for the pure-logic suites (fast). Files that need DOM
+    // opt in via `// @vitest-environment jsdom` at the top.
     environment: "node",
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.test.{ts,tsx}"],
+    // Rules tests need a Firestore emulator (Java). Exclude from the default
+    // suite — run them with `npm run test:rules`.
+    exclude: ["tests/rules/**", "e2e/**", "node_modules/**", "dist/**"],
+    setupFiles: ["src/test/setup.ts"],
   },
 })

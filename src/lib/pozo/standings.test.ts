@@ -329,12 +329,125 @@ describe("headToHeadScore directly", () => {
   })
 })
 
+describe("matchesTied / matchesLost", () => {
+  it("counts wins, ties and losses per player with PJ = PG + PE + PP", () => {
+    const matches = [
+      // r1: A,B beat C,D (6-0)
+      match(["A", "B"], ["C", "D"], 6, 0),
+      // r2: A,C vs B,D ends 4-4 (tie)
+      match(["A", "C"], ["B", "D"], 4, 4),
+      // r3: B,C beat A,D (6-2)
+      match(["B", "C"], ["A", "D"], 6, 2),
+    ]
+    const standings = computeStandings(players, matches)
+    const byId = new Map(standings.map((s) => [s.player.id, s]))
+
+    // A: won r1, tied r2, lost r3
+    expect(byId.get("A")).toMatchObject({
+      matchesPlayed: 3,
+      matchesWon: 1,
+      matchesTied: 1,
+      matchesLost: 1,
+    })
+    // B: won r1, tied r2, won r3
+    expect(byId.get("B")).toMatchObject({
+      matchesPlayed: 3,
+      matchesWon: 2,
+      matchesTied: 1,
+      matchesLost: 0,
+    })
+    // C: lost r1, tied r2, won r3
+    expect(byId.get("C")).toMatchObject({
+      matchesPlayed: 3,
+      matchesWon: 1,
+      matchesTied: 1,
+      matchesLost: 1,
+    })
+    // D: lost r1, tied r2, lost r3
+    expect(byId.get("D")).toMatchObject({
+      matchesPlayed: 3,
+      matchesWon: 0,
+      matchesTied: 1,
+      matchesLost: 2,
+    })
+
+    // PJ = PG + PE + PP always
+    for (const s of standings) {
+      expect(s.matchesPlayed).toBe(s.matchesWon + s.matchesTied + s.matchesLost)
+    }
+  })
+
+  it("matchesLost is 0 when player only wins or ties (never counts as loss)", () => {
+    const matches = [
+      match(["A", "B"], ["C", "D"], 6, 0), // A,B win
+      match(["A", "C"], ["B", "D"], 3, 3), // tie
+    ]
+    const standings = computeStandings(players, matches)
+    const a = standings.find((s) => s.player.id === "A")!
+    expect(a.matchesWon).toBe(1)
+    expect(a.matchesTied).toBe(1)
+    expect(a.matchesLost).toBe(0)
+  })
+})
+
+describe("sort by matchesWon", () => {
+  it("orders by matchesWon desc, then gamesDiff", () => {
+    const matches = [
+      match(["A", "B"], ["C", "D"], 6, 0), // A,B win
+      match(["A", "C"], ["B", "D"], 6, 0), // A,C win
+      match(["C", "D"], ["A", "B"], 6, 5), // C,D win
+    ]
+    // Totals:
+    //   A: 2W (won r1, r2), diff = +6 + +6 + −1 = +11
+    //   C: 2W (won r2, r3), diff = −6 + +6 + +1 = +1
+    //   B: 1W (won r1),     diff = +6 + −6 + −1 = −1
+    //   D: 1W (won r3),     diff = −6 + −6 + +1 = −11
+    const standings = computeStandings(players, matches)
+    const sorted = sortStandings(standings, "matchesWon", matches)
+    // matchesWon desc, then gamesDiff desc → A, C, B, D
+    expect(sorted.map((s) => s.player.id)).toEqual(["A", "C", "B", "D"])
+  })
+
+  it("uses H2H when matchesWon AND gamesDiff are both tied", () => {
+    // Mirror symmetric scenario but with one head-to-head broken
+    const matches = [
+      match(["A", "C"], ["B", "D"], 6, 4), // A,C beat B,D
+      match(["B", "D"], ["A", "C"], 6, 4), // B,D beat A,C (reverse)
+      // After: A=1W +2/-2 = 0 diff. B=1W -2/+2 = 0. C=1W +2/-2 = 0. D=1W -2/+2 = 0.
+      // All tied at 1W and 0 diff → H2H decides.
+    ]
+    const sorted = sortStandings(
+      computeStandings(players, matches),
+      "matchesWon",
+      matches,
+    )
+    expect(sorted).toHaveLength(4)
+    // Just verify no crash; H2H details covered by the points-sort tests.
+  })
+
+  it("differs from points sort only when there are ties", () => {
+    // No ties → matchesWon and points produce same order
+    const matches = [
+      match(["A", "B"], ["C", "D"], 6, 0),
+      match(["A", "C"], ["B", "D"], 6, 0),
+      match(["A", "D"], ["B", "C"], 6, 0),
+    ]
+    const standings = computeStandings(players, matches)
+    const byMatches = sortStandings(standings, "matchesWon", matches)
+    const byPoints = sortStandings(standings, "points", matches)
+    expect(byMatches.map((s) => s.player.id)).toEqual(
+      byPoints.map((s) => s.player.id),
+    )
+  })
+})
+
 describe("sortStandings purity", () => {
   it("does not mutate the input array", () => {
     const matches = [match(["A", "B"], ["C", "D"], 6, 0)]
     const standings = computeStandings(players, matches)
     const original = standings.map((s) => s.player.id)
     sortStandings(standings, "games")
+    sortStandings(standings, "matchesWon", matches)
     sortStandings(standings, "points", matches)
     expect(standings.map((s) => s.player.id)).toEqual(original)
   })

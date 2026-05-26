@@ -1,6 +1,8 @@
 import { Link } from "react-router"
 import { ArrowRightIcon } from "lucide-react"
 
+import { Heading } from "@/components/ui/typography"
+
 /**
  * Closing CTA. Mirrors the hero's spotlight treatment (radial gradient
  * + emerald tint, this time anchored at the bottom) so the page opens
@@ -18,9 +20,9 @@ export function LandingCta() {
         }}
       />
       <div className="relative mx-auto max-w-3xl px-4 py-28 text-center sm:px-6">
-        <h2 className="text-balance text-4xl font-semibold tracking-tight sm:text-5xl">
+        <Heading level="h2" className="text-zinc-900">
           Listo para armar el próximo pozo.
-        </h2>
+        </Heading>
         <p className="mt-4 text-zinc-500">
           Probalo gratis. Tu primer pozo en menos de un minuto.
         </p>

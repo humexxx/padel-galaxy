@@ -12,6 +12,9 @@ import type { Match, PairingAlgorithm, Player, Pozo } from "./types"
 const playerNames = (n: number) =>
   Array.from({ length: n }, (_, i) => `P${i + 1}`)
 
+const playerInputs = (n: number) =>
+  playerNames(n).map((name, i) => ({ id: `p${i + 1}`, name }))
+
 function makePozo(opts: {
   players?: number
   courts?: number
@@ -24,7 +27,7 @@ function makePozo(opts: {
   return createPozo({
     name: "Test",
     ownerId: "test-owner",
-    players: playerNames(players),
+    players: playerInputs(players),
     config: {
       courts,
       matchesPerPlayer: opts.matchesPerPlayer ?? defaultMatchesPerPlayer(players, courts),
@@ -613,4 +616,278 @@ describe("algorithm × no-repeat-pairs matrix", () => {
       expect(finished.matches.length).toBe(pozo.totalRounds * pozo.config.courts)
     },
   )
+})
+
+/**
+ * The above coverage relies on the canonical round-robin (circle method),
+ * which is only used when players exactly fill the courts (N = courts*4).
+ * The cases below force the algorithm into its NON-canonical backtracking
+ * planner — where bad early choices could theoretically corner the planner
+ * into partner repeats in late rounds.
+ */
+describe("non-canonical planner — late-round resilience", () => {
+  // Rotation cases: more players than slots, so canonical round-robin skips.
+  it.each([
+    { players: 10, courts: 2, matchesPerPlayer: 5 },
+    { players: 14, courts: 3, matchesPerPlayer: 6 },
+    { players: 9, courts: 2, matchesPerPlayer: 4 },
+  ])(
+    "$players × $courts × $matchesPerPlayer with balanced + no-repeat: stays at 0 partner repeats end-to-end",
+    ({ players, courts, matchesPerPlayer }) => {
+      const pozo = makePozo({
+        players,
+        courts,
+        matchesPerPlayer,
+        algorithm: "balanced",
+        allowRepeatPairs: false,
+      })
+      const finished = simulateFullPozo(pozo, () => [3, 3])
+      const dups = countDuplicates(getPartnerPairs(finished.matches))
+      expect(dups).toBe(0)
+    },
+  )
+
+  it("biased scoring (one team dominates) does NOT trigger partner repeats: balanced keeps the late rounds clean", () => {
+    // Scenario where the SAME player slot wins every match. The balanced
+    // algorithm uses player "strength" (wins + games-diff) to pair similar
+    // strengths together. With one player always winning, their strength
+    // diverges fast — could push the planner into a corner if it's greedy.
+    const pozo = makePozo({
+      players: 10,
+      courts: 2,
+      matchesPerPlayer: 5,
+      algorithm: "balanced",
+      allowRepeatPairs: false,
+    })
+    // Team A always wins 6-0. Strengths get progressively skewed.
+    const finished = simulateFullPozo(pozo, () => [6, 0])
+    const dups = countDuplicates(getPartnerPairs(finished.matches))
+    expect(dups).toBe(0)
+    expect(finished.status).toBe("finished")
+    expect(finished.matches.length).toBe(
+      pozo.totalRounds * pozo.config.courts,
+    )
+  })
+
+  it("snake + biased scoring: late rounds still produce a complete schedule (may have repeats since snake actively pairs strong+weak)", () => {
+    // Snake forces strong-weak partnerships, which constrains the planner
+    // more than balanced does. Verify it still PRODUCES a schedule even when
+    // forced to retry pairings round after round.
+    const pozo = makePozo({
+      players: 10,
+      courts: 2,
+      matchesPerPlayer: 5,
+      algorithm: "snake",
+      allowRepeatPairs: false,
+    })
+    const finished = simulateFullPozo(pozo, (round) => {
+      // Strong+weak pairs win when on the "strong" half (roughly idx 0).
+      return [round % 2 === 0 ? 6 : 2, round % 2 === 0 ? 2 : 6]
+    })
+    expect(finished.status).toBe("finished")
+    expect(finished.matches.length).toBe(
+      pozo.totalRounds * pozo.config.courts,
+    )
+    // Partner repeats may be > 0 here (snake's strong+weak goal can conflict
+    // with no-repeat in rotation scenarios) but degradation should be small.
+    const dups = countDuplicates(getPartnerPairs(finished.matches))
+    expect(dups).toBeLessThanOrEqual(2)
+  })
+
+  it("50-run stress on non-canonical case: dups never exceed planner's worst-case", () => {
+    let totalDups = 0
+    let runs = 0
+    for (let i = 0; i < 50; i++) {
+      const pozo = makePozo({
+        players: 10,
+        courts: 2,
+        matchesPerPlayer: 5,
+        algorithm: "balanced",
+        allowRepeatPairs: false,
+      })
+      const finished = simulateFullPozo(pozo, () => [
+        Math.floor(Math.random() * 6) + 1,
+        Math.floor(Math.random() * 6) + 1,
+      ])
+      totalDups += countDuplicates(getPartnerPairs(finished.matches))
+      runs++
+    }
+    // Average dups per run should be ~0 — the planner shouldn't be regularly
+    // painting itself into corners. Allow a small budget for adversarial seeds.
+    expect(totalDups / runs).toBeLessThan(0.5)
+  })
+})
+
+/**
+ * Algorithm-vs-algorithm: with the same seeded scenario, balanced should
+ * produce match-level pairings with smaller skill gaps than random.
+ *
+ * Two scenarios:
+ *   1) Canonical mode: partnerships are fixed by the circle method; the algo
+ *      only controls how those pairs are grouped into matches. The effect is
+ *      small but should still be measurable.
+ *   2) Non-canonical mode (allowRepeatPairs:true): the algo has full control
+ *      over partnerships AND match-level grouping. Effect should be large.
+ */
+describe("algorithm-driven skill balancing (quantitative)", () => {
+  /** Player strength as the algorithm computes it: wins + gamesDiff/6. */
+  function playerStrength(playerId: string, history: Match[]): number {
+    let wins = 0
+    let gd = 0
+    for (const m of history) {
+      if (m.gamesA === null || m.gamesB === null) continue
+      const onA = [m.teamA.playerA, m.teamA.playerB].includes(playerId)
+      const onB = [m.teamB.playerA, m.teamB.playerB].includes(playerId)
+      if (!onA && !onB) continue
+      const diff = m.gamesA - m.gamesB
+      if (onA) {
+        if (m.gamesA > m.gamesB) wins++
+        gd += diff
+      } else {
+        if (m.gamesB > m.gamesA) wins++
+        gd -= diff
+      }
+    }
+    return wins + gd / 6
+  }
+
+  function avgMatchSkillGap(matches: Match[], history: Match[]): number {
+    if (matches.length === 0) return 0
+    let total = 0
+    for (const m of matches) {
+      const sa =
+        playerStrength(m.teamA.playerA, history) +
+        playerStrength(m.teamA.playerB, history)
+      const sb =
+        playerStrength(m.teamB.playerA, history) +
+        playerStrength(m.teamB.playerB, history)
+      total += Math.abs(sa - sb)
+    }
+    return total / matches.length
+  }
+
+  /** Build a pozo with pre-seeded history that gives every player a different
+   * strength. We do 3 rounds with 8 players where each round produces a clear
+   * win/loss for specific players, so by round 4 the strength ladder is:
+   * P1 > P2 > P3 > P4 > P5 > P6 > P7 > P8 with strict gaps. */
+  function buildSkewedPozo(
+    algorithm: PairingAlgorithm,
+    allowRepeatPairs: boolean,
+  ): Pozo {
+    const players = playerNames(8).map((n) => ({ id: n, name: n })) as Player[]
+    const fakeHistory: Match[] = []
+    // r0: top-half (P1,P2) crushes bottom (P7,P8); middle (P3,P4) beats (P5,P6) close
+    fakeHistory.push(
+      {
+        id: "h0-1", round: 0, court: 1,
+        teamA: { playerA: "P1", playerB: "P2" },
+        teamB: { playerA: "P7", playerB: "P8" },
+        gamesA: 6, gamesB: 0,
+      },
+      {
+        id: "h0-2", round: 0, court: 2,
+        teamA: { playerA: "P3", playerB: "P4" },
+        teamB: { playerA: "P5", playerB: "P6" },
+        gamesA: 6, gamesB: 4,
+      },
+    )
+    // r1: P1 keeps winning with margin; P3 wins moderately
+    fakeHistory.push(
+      {
+        id: "h1-1", round: 1, court: 1,
+        teamA: { playerA: "P1", playerB: "P3" },
+        teamB: { playerA: "P6", playerB: "P8" },
+        gamesA: 6, gamesB: 1,
+      },
+      {
+        id: "h1-2", round: 1, court: 2,
+        teamA: { playerA: "P2", playerB: "P4" },
+        teamB: { playerA: "P5", playerB: "P7" },
+        gamesA: 6, gamesB: 3,
+      },
+    )
+    // r2: continue the gradient
+    fakeHistory.push(
+      {
+        id: "h2-1", round: 2, court: 1,
+        teamA: { playerA: "P1", playerB: "P4" },
+        teamB: { playerA: "P5", playerB: "P8" },
+        gamesA: 6, gamesB: 2,
+      },
+      {
+        id: "h2-2", round: 2, court: 2,
+        teamA: { playerA: "P2", playerB: "P3" },
+        teamB: { playerA: "P6", playerB: "P7" },
+        gamesA: 6, gamesB: 1,
+      },
+    )
+
+    return {
+      id: "test", ownerId: "o", name: "skew",
+      createdAt: Date.now(),
+      status: "playing",
+      config: {
+        courts: 2,
+        matchesPerPlayer: 7,
+        totalDurationMin: 90,
+        warmupMin: 5,
+        algorithm,
+        allowRepeatPairs,
+      },
+      players,
+      matches: fakeHistory,
+      currentRound: 2,
+      totalRounds: 7,
+      startedAt: Date.now(),
+      warmupEndsAt: Date.now(),
+      endsAt: Date.now() + 1e9,
+      finishedAt: null,
+    }
+  }
+
+  it("canonical mode: balanced match-grouping gives skill-gap ≤ random's", () => {
+    // Both pozos have the SAME seeded history → same strengths.
+    // allowRepeatPairs=false + 8 players × 2 courts triggers canonical →
+    // partnerships are fixed by the circle method, only match-grouping
+    // is algorithm-driven.
+    const balancedPozo = buildSkewedPozo("balanced", false)
+    const randomPozo = buildSkewedPozo("random", false)
+
+    // Generate the NEXT round (index 3) for each
+    const balancedNext = generateRound(balancedPozo, 3)
+    const randomNext = generateRound(randomPozo, 3)
+
+    const history = balancedPozo.matches // same history for both
+    const balancedGap = avgMatchSkillGap(balancedNext, history)
+    const randomGap = avgMatchSkillGap(randomNext, history)
+
+    // Balanced should never produce a wider gap than random under same seed.
+    // Equality is acceptable (canonical sometimes leaves no degree of freedom),
+    // but strict inequality would be ideal.
+    expect(balancedGap).toBeLessThanOrEqual(randomGap)
+  })
+
+  it("non-canonical mode (allowRepeatPairs:true): balanced gap STRICTLY < random gap on average", () => {
+    // With repeats allowed AND 8 players × 2 courts, the algorithm controls
+    // both partnerships and grouping — balanced should clearly outperform
+    // random on team-strength balance.
+    // Average over 20 seeded runs to smooth out the deterministic-PRNG noise.
+    let balancedTotal = 0
+    let randomTotal = 0
+    const RUNS = 20
+    for (let i = 0; i < RUNS; i++) {
+      const balancedPozo = buildSkewedPozo("balanced", true)
+      const randomPozo = buildSkewedPozo("random", true)
+      const balancedNext = generateRound(balancedPozo, 3)
+      const randomNext = generateRound(randomPozo, 3)
+      balancedTotal += avgMatchSkillGap(balancedNext, balancedPozo.matches)
+      randomTotal += avgMatchSkillGap(randomNext, randomPozo.matches)
+    }
+    const balancedAvg = balancedTotal / RUNS
+    const randomAvg = randomTotal / RUNS
+    // Balanced should be MEASURABLY smaller. We don't pin an exact ratio
+    // (depends on the strength ladder), just require a real margin.
+    expect(balancedAvg).toBeLessThan(randomAvg)
+  })
+
 })

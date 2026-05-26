@@ -5,6 +5,8 @@ import {
   UsersIcon,
 } from "lucide-react"
 
+import { Heading } from "@/components/ui/typography"
+
 const FEATURES = [
   {
     icon: ShuffleIcon,
@@ -39,9 +41,9 @@ export function LandingFeatures() {
           <span className="text-xs font-medium uppercase tracking-widest text-zinc-400">
             Producto
           </span>
-          <h2 className="mt-3 text-balance text-4xl font-semibold tracking-tight sm:text-5xl">
+          <Heading level="h2" className="mt-3 text-zinc-900">
             Pensado para que solo te preocupes por jugar.
-          </h2>
+          </Heading>
         </div>
 
         {/* Single 1px gap creates clean dividers between cards without

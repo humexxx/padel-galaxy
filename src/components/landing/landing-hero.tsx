@@ -1,6 +1,8 @@
 import { Link } from "react-router"
 import { ArrowRightIcon } from "lucide-react"
 
+import { Heading } from "@/components/ui/typography"
+
 /**
  * Hero with the same "spotlight + grid lines" treatment used in
  * trim-success and allstars-galaxy, tinted emerald to nod at the padel
@@ -43,11 +45,11 @@ export function LandingHero() {
           <ArrowRightIcon className="size-3" />
         </a>
 
-        <h1 className="mx-auto max-w-4xl text-balance text-5xl font-semibold leading-[1.05] tracking-tight sm:text-6xl md:text-7xl">
+        <Heading level="display" className="mx-auto max-w-4xl">
           Tus pozos de pádel,
           <br />
           organizados.
-        </h1>
+        </Heading>
 
         <p className="mx-auto mt-6 max-w-2xl text-balance text-base text-zinc-500 sm:text-lg">
           Programá rondas sin parejas repetidas, cronometrá los partidos y

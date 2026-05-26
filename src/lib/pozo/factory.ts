@@ -6,19 +6,27 @@ export const DEFAULT_CONFIG: PozoConfig = {
   matchesPerPlayer: 7,
   totalDurationMin: 90,
   warmupMin: 5,
+  warmupIncludedInTotal: true,
   algorithm: "balanced",
   allowRepeatPairs: false,
 }
 
 export function createPozo(input: {
   name: string
-  players: string[]
+  /** Each player must already have a stable id (either a Firestore players
+   * collection id, or a one-off uuid for ad-hoc players). The factory does
+   * NOT generate ids — that's the caller's job so the player record and
+   * the pozo can be linked. */
+  players: Array<{ id: string; name: string }>
   config: PozoConfig
   ownerId: string
+  /** Required for pozos created from the UI. The migration script may
+   * temporarily create pozos without one, then backfill. */
+  groupId?: string
 }): Pozo {
-  const players: Player[] = input.players.map((name) => ({
-    id: crypto.randomUUID(),
-    name: name.trim(),
+  const players: Player[] = input.players.map((p) => ({
+    id: p.id,
+    name: p.name.trim(),
   }))
   const totalRounds = computeTotalRounds(
     players.length,
@@ -28,6 +36,7 @@ export function createPozo(input: {
   return {
     id: crypto.randomUUID(),
     ownerId: input.ownerId,
+    groupId: input.groupId,
     name: input.name.trim() || "Pozo sin nombre",
     createdAt: Date.now(),
     status: "draft",
@@ -46,7 +55,12 @@ export function createPozo(input: {
 export function startPozo(pozo: Pozo, now: number = Date.now()): Pozo {
   if (pozo.status !== "draft") return pozo
   const warmupMs = pozo.config.warmupMin * 60_000
-  const totalMs = pozo.config.totalDurationMin * 60_000
+  const configuredMs = pozo.config.totalDurationMin * 60_000
+  const included = pozo.config.warmupIncludedInTotal ?? true
+  // Wall-clock duration of the whole pozo. When warmup is included in the
+  // total, it occupies the first warmupMs of configuredMs. When not, the
+  // warmup is added on top.
+  const totalMs = included ? configuredMs : warmupMs + configuredMs
   const firstRound = generateRound(pozo, 0)
   return {
     ...pozo,
@@ -114,6 +128,9 @@ export function finishPozo(pozo: Pozo): Pozo {
 
 export function computeMatchDurationMin(config: PozoConfig, totalRounds: number): number {
   if (totalRounds <= 0) return 0
-  const playMin = Math.max(0, config.totalDurationMin - config.warmupMin)
+  const included = config.warmupIncludedInTotal ?? true
+  const playMin = included
+    ? Math.max(0, config.totalDurationMin - config.warmupMin)
+    : config.totalDurationMin
   return playMin / totalRounds
 }

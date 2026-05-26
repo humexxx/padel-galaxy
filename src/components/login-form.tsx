@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { Heading, Text } from "@/components/ui/typography"
 import { SignupsDisabledError, useAuth } from "@/contexts/auth-context"
 import { useAppSettings } from "@/hooks/use-settings"
 
@@ -96,12 +97,12 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"form">)
     >
       <FieldGroup>
         <div className="flex flex-col items-center gap-1.5 text-center">
-          <h1 className="text-2xl font-bold tracking-tight">
+          <Heading level="h3" as="h1">
             {mode === "signin" ? "Bienvenido de nuevo" : "Crear cuenta"}
-          </h1>
-          <p className="text-sm text-balance text-muted-foreground">
+          </Heading>
+          <Text variant="muted" className="text-balance">
             Ingresá para crear y gestionar tus pozos de pádel.
-          </p>
+          </Text>
         </div>
 
         <Field>

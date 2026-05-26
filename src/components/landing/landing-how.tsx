@@ -1,3 +1,5 @@
+import { Heading } from "@/components/ui/typography"
+
 const STEPS = [
   {
     n: 1,
@@ -32,9 +34,9 @@ export function LandingHow() {
           <span className="text-xs font-medium uppercase tracking-widest text-zinc-400">
             Cómo funciona
           </span>
-          <h2 className="mt-3 text-balance text-4xl font-semibold tracking-tight sm:text-5xl">
+          <Heading level="h2" className="mt-3 text-zinc-900">
             En cuatro pasos.
-          </h2>
+          </Heading>
           <p className="mt-4 text-zinc-500">
             No necesitás nada más que los nombres de los jugadores.
           </p>

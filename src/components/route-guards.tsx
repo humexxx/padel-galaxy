@@ -3,6 +3,7 @@ import { Loader2Icon, ShieldAlertIcon } from "lucide-react"
 
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
+import { Heading, Text } from "@/components/ui/typography"
 
 function FullPageSpinner() {
   return (
@@ -34,10 +35,38 @@ export function RequireAdmin() {
       <div className="mx-auto flex min-h-[60svh] max-w-md flex-col items-center justify-center gap-4 px-6 text-center">
         <ShieldAlertIcon className="size-10 text-destructive" />
         <div className="space-y-1">
-          <h1 className="text-xl font-bold">Acceso restringido</h1>
-          <p className="text-sm text-muted-foreground">
-            Esta sección es solo para administradores.
-          </p>
+          <Heading level="h3" as="h1">Acceso restringido</Heading>
+          <Text variant="muted">Esta sección es solo para administradores.</Text>
+        </div>
+        <Button asChild variant="outline">
+          <a href="/pozos">Volver a pozos</a>
+        </Button>
+      </div>
+    )
+  }
+  return <Outlet />
+}
+
+/**
+ * Stricter than RequireAdmin — only the top tier gets in. Used for
+ * /admin and any future destructive operations (delete users, change
+ * billing, etc).
+ */
+export function RequireSuperAdmin() {
+  const { user, isSuperAdmin, loading } = useAuth()
+
+  if (loading) return <FullPageSpinner />
+  if (!user) return <Navigate to="/login" replace />
+  if (!isSuperAdmin) {
+    return (
+      <div className="mx-auto flex min-h-[60svh] max-w-md flex-col items-center justify-center gap-4 px-6 text-center">
+        <ShieldAlertIcon className="size-10 text-destructive" />
+        <div className="space-y-1">
+          <Heading level="h3" as="h1">Acceso restringido</Heading>
+          <Text variant="muted">
+            Esta sección es solo para superadmin. Si necesitás acceso, pedíselo
+            a quien tenga la cuenta principal.
+          </Text>
         </div>
         <Button asChild variant="outline">
           <a href="/pozos">Volver a pozos</a>

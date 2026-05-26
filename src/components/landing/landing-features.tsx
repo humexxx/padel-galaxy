@@ -32,14 +32,14 @@ export function LandingFeatures() {
   return (
     <section
       id="features"
-      className="border-b border-zinc-200/80 bg-white py-20 sm:py-24"
+      className="border-b border-zinc-200/80 bg-white py-24"
     >
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <div className="mx-auto max-w-2xl text-center">
           <span className="text-xs font-medium uppercase tracking-widest text-zinc-400">
             Producto
           </span>
-          <h2 className="mt-3 text-balance text-4xl font-bold tracking-tight text-zinc-900 sm:text-5xl">
+          <h2 className="mt-3 text-balance text-4xl font-semibold tracking-tight sm:text-5xl">
             Pensado para que solo te preocupes por jugar.
           </h2>
         </div>
@@ -50,12 +50,12 @@ export function LandingFeatures() {
           {FEATURES.map(({ icon: Icon, title, body }) => (
             <div
               key={title}
-              className="group relative bg-white p-6 transition-colors hover:bg-zinc-50 sm:p-7"
+              className="group relative bg-white p-6 transition-colors hover:bg-zinc-50 sm:p-8"
             >
               <div className="mb-5 inline-flex h-9 w-9 items-center justify-center rounded-md border border-zinc-200 bg-zinc-50 text-zinc-700 transition-colors group-hover:border-zinc-300 group-hover:text-zinc-900">
-                <Icon className="size-4" strokeWidth={1.75} />
+                <Icon className="size-4" />
               </div>
-              <h3 className="text-base font-semibold tracking-tight text-zinc-900">
+              <h3 className="text-lg font-medium tracking-tight text-zinc-900">
                 {title}
               </h3>
               <p className="mt-2 text-sm leading-relaxed text-zinc-500">

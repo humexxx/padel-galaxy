@@ -25,14 +25,14 @@ export function LandingHow() {
   return (
     <section
       id="how"
-      className="border-b border-zinc-200/80 bg-zinc-50 py-20 sm:py-24"
+      className="border-b border-zinc-200/80 bg-zinc-50 py-24"
     >
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <div className="mx-auto max-w-2xl text-center">
           <span className="text-xs font-medium uppercase tracking-widest text-zinc-400">
             Cómo funciona
           </span>
-          <h2 className="mt-3 text-balance text-4xl font-bold tracking-tight text-zinc-900 sm:text-5xl">
+          <h2 className="mt-3 text-balance text-4xl font-semibold tracking-tight sm:text-5xl">
             En cuatro pasos.
           </h2>
           <p className="mt-4 text-zinc-500">
@@ -46,10 +46,10 @@ export function LandingHow() {
               key={n}
               className="flex flex-col gap-3 bg-white p-6 sm:p-8"
             >
-              <span className="font-mono text-2xl font-bold tabular-nums text-zinc-300">
-                {String(n).padStart(2, "0")}
+              <span className="font-mono text-xs font-medium uppercase tracking-widest text-zinc-400">
+                Paso {String(n).padStart(2, "0")}
               </span>
-              <h3 className="text-base font-semibold text-zinc-900">
+              <h3 className="text-lg font-medium tracking-tight text-zinc-900">
                 {title}
               </h3>
               <p className="text-sm leading-relaxed text-zinc-500">{body}</p>

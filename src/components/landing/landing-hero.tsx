@@ -33,7 +33,7 @@ export function LandingHero() {
         }}
       />
 
-      <div className="relative mx-auto max-w-6xl px-4 pb-24 pt-20 text-center sm:px-6 sm:pt-28">
+      <div className="relative mx-auto max-w-6xl px-4 pb-28 pt-24 text-center sm:px-6 sm:pt-32">
         <a
           href="#features"
           className="mx-auto mb-8 inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white/70 px-3 py-1 text-xs text-zinc-600 backdrop-blur transition-colors hover:border-zinc-300 hover:text-zinc-900"
@@ -43,13 +43,13 @@ export function LandingHero() {
           <ArrowRightIcon className="size-3" />
         </a>
 
-        <h1 className="mx-auto max-w-3xl text-balance text-5xl font-bold leading-[1.05] tracking-tight text-zinc-900 sm:text-6xl md:text-7xl">
+        <h1 className="mx-auto max-w-4xl text-balance text-5xl font-semibold leading-[1.05] tracking-tight sm:text-6xl md:text-7xl">
           Tus pozos de pádel,
           <br />
           organizados.
         </h1>
 
-        <p className="mx-auto mt-6 max-w-xl text-balance text-base text-zinc-500 sm:text-lg">
+        <p className="mx-auto mt-6 max-w-2xl text-balance text-base text-zinc-500 sm:text-lg">
           Programá rondas sin parejas repetidas, cronometrá los partidos y
           rankeá automáticamente. Todo en el celular, sin papel.
         </p>
@@ -57,14 +57,14 @@ export function LandingHero() {
         <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Link
             to="/login"
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-zinc-900 px-6 text-sm font-semibold text-white transition hover:bg-zinc-800"
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-zinc-900 px-6 text-[14px] font-medium text-white transition hover:bg-zinc-800"
           >
             Empezar ahora
             <ArrowRightIcon className="size-4" />
           </Link>
           <a
             href="#how"
-            className="inline-flex h-11 items-center justify-center rounded-full border border-zinc-200 bg-white px-6 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-50"
+            className="inline-flex h-11 items-center justify-center rounded-full border border-zinc-200 bg-white px-6 text-[14px] font-medium text-zinc-900 transition hover:bg-zinc-50"
           >
             Ver cómo funciona
           </a>
@@ -75,7 +75,7 @@ export function LandingHero() {
         </p>
       </div>
 
-      <div className="relative mx-auto max-w-5xl px-4 pb-20 sm:px-6">
+      <div className="relative mx-auto max-w-5xl px-4 pb-24 sm:px-6">
         <FauxPozoPreview />
       </div>
     </section>
@@ -115,7 +115,7 @@ function FauxPozoPreview() {
         </div>
 
         {/* KPIs */}
-        <div className="grid grid-cols-3 gap-3 sm:gap-4">
+        <div className="grid grid-cols-3 gap-4">
           {[
             { label: "Jugadores", value: "8" },
             { label: "Canchas", value: "2" },
@@ -123,10 +123,10 @@ function FauxPozoPreview() {
           ].map((kpi) => (
             <div
               key={kpi.label}
-              className="rounded-lg border border-zinc-200 bg-white p-3 sm:p-4"
+              className="rounded-lg border border-zinc-200 bg-white p-4"
             >
               <div className="text-xs text-zinc-500">{kpi.label}</div>
-              <div className="mt-1 text-xl font-bold tracking-tight tabular-nums text-zinc-900 sm:text-2xl">
+              <div className="mt-1 text-2xl font-semibold tracking-tight tabular-nums text-zinc-900">
                 {kpi.value}
               </div>
             </div>
@@ -134,7 +134,7 @@ function FauxPozoPreview() {
         </div>
 
         {/* Mini standings */}
-        <div className="mt-5 rounded-lg border border-zinc-200 bg-white sm:mt-6">
+        <div className="mt-6 rounded-lg border border-zinc-200 bg-white">
           <div className="border-b border-zinc-100 px-4 py-2.5 text-xs font-medium uppercase tracking-widest text-zinc-400">
             Tabla
           </div>

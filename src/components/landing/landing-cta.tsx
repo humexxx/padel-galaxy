@@ -17,8 +17,8 @@ export function LandingCta() {
             "radial-gradient(50% 60% at 50% 100%, rgba(16,185,129,0.10) 0%, rgba(255,255,255,0) 70%)",
         }}
       />
-      <div className="relative mx-auto max-w-3xl px-4 py-24 text-center sm:px-6 sm:py-28">
-        <h2 className="text-balance text-4xl font-bold tracking-tight text-zinc-900 sm:text-5xl">
+      <div className="relative mx-auto max-w-3xl px-4 py-28 text-center sm:px-6">
+        <h2 className="text-balance text-4xl font-semibold tracking-tight sm:text-5xl">
           Listo para armar el próximo pozo.
         </h2>
         <p className="mt-4 text-zinc-500">
@@ -27,7 +27,7 @@ export function LandingCta() {
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Link
             to="/login"
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-zinc-900 px-6 text-sm font-semibold text-white transition hover:bg-zinc-800"
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-zinc-900 px-6 text-[14px] font-medium text-white transition hover:bg-zinc-800"
           >
             Empezar ahora
             <ArrowRightIcon className="size-4" />

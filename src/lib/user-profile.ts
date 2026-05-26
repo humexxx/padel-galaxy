@@ -1,7 +1,6 @@
 import {
   collection,
   deleteDoc,
-  deleteField,
   doc,
   getDoc,
   onSnapshot,
@@ -13,7 +12,14 @@ import {
   type Unsubscribe,
 } from "firebase/firestore"
 
+import { findInvite, deleteInvite } from "@/lib/admin-invites"
+import { normalizeEmail } from "@/lib/email"
 import { db } from "@/lib/firebase"
+import { findInvitedPlayer, linkInvitedPlayer } from "@/lib/invites"
+
+// Re-export so existing callers that imported `normalizeEmail` from this
+// module keep working without touching every call site.
+export { normalizeEmail }
 
 const COLLECTION = "users"
 
@@ -42,12 +48,6 @@ export const PREFERRED_SIDE_LABELS: Record<PreferredSide, string> = {
  */
 export type UserRole = "superadmin" | "admin" | "player"
 
-export const ROLE_LABELS: Record<UserRole, string> = {
-  superadmin: "Superadmin",
-  admin: "Admin",
-  player: "Jugador",
-}
-
 /**
  * Profile doc stored at `/users/{uid}`. `displayName` and `email` are
  * mirrored from Firebase Auth so the admin page can render a users table
@@ -64,15 +64,6 @@ export type UserProfile = {
   role: UserRole
   createdAt: number
   updatedAt: number
-}
-
-/**
- * Lowercase email used as the canonical key for invites and dedup. RFC
- * 5321 says local-parts are technically case-sensitive but no real-world
- * mail server respects that, so we treat addresses as case-insensitive.
- */
-export function normalizeEmail(email: string): string {
-  return email.trim().toLowerCase()
 }
 
 function userDoc(uid: string) {
@@ -230,15 +221,11 @@ async function deriveInitialRole(
 ): Promise<UserRole> {
   if (claims.superadmin) return "superadmin"
   if (claims.admin) return "admin"
-  // Lazy import to avoid a circular dep with admin-invites (which imports
-  // user-profile for normalizeEmail).
-  const { findInvite } = await import("@/lib/admin-invites")
   const invite = await findInvite(email)
   return invite ? "admin" : "player"
 }
 
 async function consumeAdminInviteIfAny(email: string): Promise<void> {
-  const { findInvite, deleteInvite } = await import("@/lib/admin-invites")
   const invite = await findInvite(email)
   if (invite) await deleteInvite(invite.email)
 }
@@ -255,7 +242,6 @@ async function consumeAdminInviteIfAny(email: string): Promise<void> {
  */
 async function linkInvitedPlayerIfAny(email: string, uid: string): Promise<void> {
   try {
-    const { findInvitedPlayer, linkInvitedPlayer } = await import("@/lib/invites")
     const player = await findInvitedPlayer(email)
     if (player && player.linkedUid !== uid) {
       await linkInvitedPlayer(player.id, uid)
@@ -292,22 +278,6 @@ export function subscribeAdmins(
     onError,
   )
 }
-
-/**
- * One-shot lookup by email. We don't subscribe because the only caller
- * (admin invite-conversion check) needs a single value, not a stream.
- * Returns null if no match.
- */
-export async function findUserByEmail(email: string): Promise<UserProfile | null> {
-  const q = query(collection(db, COLLECTION), where("email", "==", normalizeEmail(email)))
-  const { getDocs } = await import("firebase/firestore")
-  const snap = await getDocs(q)
-  if (snap.empty) return null
-  return snap.docs[0].data() as UserProfile
-}
-
-// Re-export for legacy callers that imported deleteField/etc from us.
-export { deleteField }
 
 /**
  * Delete the user's profile doc. Used as part of the account-deletion flow

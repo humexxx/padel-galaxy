@@ -93,8 +93,12 @@ export function PozoForm() {
   const [allowRepeatPairs, setAllowRepeatPairs] = React.useState<boolean>(DEFAULT_CONFIG.allowRepeatPairs)
   const [submitting, setSubmitting] = React.useState(false)
 
-  // Slots that have a name filled in (existing or new).
-  const filledSlots = slots.filter((s) => s.name.trim().length > 0)
+  // Slots that have a name filled in (existing or new). Memoized so the
+  // dependent derivations below don't recompute on unrelated re-renders.
+  const filledSlots = React.useMemo(
+    () => slots.filter((s) => s.name.trim().length > 0),
+    [slots],
+  )
   // IDs already chosen in other slots — passed to each combobox so users can't
   // pick the same person twice.
   const pickedIds = React.useMemo(() => {
@@ -114,16 +118,30 @@ export function PozoForm() {
     totalRounds,
   )
 
-  const errors: string[] = []
-  if (filledSlots.length < MIN_PLAYERS) errors.push(`Necesitás al menos ${MIN_PLAYERS} jugadores.`)
-  if (filledSlots.length < courts * 4)
-    errors.push(`Para ${courts} canchas necesitás al menos ${courts * 4} jugadores.`)
-  const normalizedNames = filledSlots.map((s) => normalizeName(s.name))
-  if (new Set(normalizedNames).size !== normalizedNames.length)
-    errors.push("Hay nombres de jugadores repetidos.")
-  if (matchesPerPlayer < 1) errors.push("La cantidad de partidos debe ser al menos 1.")
-  if (warmupIncluded && warmupMin >= totalDurationMin)
-    errors.push("La duración total debe ser mayor al tiempo de calentamiento.")
+  // Validate the form on each render but memoize so we only re-validate when
+  // an actual input changes (instead of every keystroke in any sibling field).
+  const errors = React.useMemo(() => {
+    const out: string[] = []
+    if (filledSlots.length < MIN_PLAYERS)
+      out.push(`Necesitás al menos ${MIN_PLAYERS} jugadores.`)
+    if (filledSlots.length < courts * 4)
+      out.push(`Para ${courts} canchas necesitás al menos ${courts * 4} jugadores.`)
+    const normalizedNames = filledSlots.map((s) => normalizeName(s.name))
+    if (new Set(normalizedNames).size !== normalizedNames.length)
+      out.push("Hay nombres de jugadores repetidos.")
+    if (matchesPerPlayer < 1)
+      out.push("La cantidad de partidos debe ser al menos 1.")
+    if (warmupIncluded && warmupMin >= totalDurationMin)
+      out.push("La duración total debe ser mayor al tiempo de calentamiento.")
+    return out
+  }, [
+    filledSlots,
+    courts,
+    matchesPerPlayer,
+    warmupIncluded,
+    warmupMin,
+    totalDurationMin,
+  ])
 
   function setCourtsAndAdjustPlayers(newCourts: number) {
     setCourts(newCourts)
@@ -354,9 +372,13 @@ export function PozoForm() {
           <div className="grid gap-2 sm:grid-cols-2">
             {slots.map((slot, i) => {
               // Exclude IDs picked in OTHER slots, but allow the current
-              // slot's own id to remain pickable.
-              const exclude = new Set(pickedIds)
-              if (slot.id) exclude.delete(slot.id)
+              // slot's own id to remain pickable. We re-use the parent
+              // `pickedIds` Set and just delete this slot's id locally if
+              // present — the cost is O(1) vs `new Set(pickedIds)` per slot
+              // per render (was N×M with empty pozos).
+              const exclude = slot.id && pickedIds.has(slot.id)
+                ? new Set([...pickedIds].filter((id) => id !== slot.id))
+                : pickedIds
               return (
                 <div key={i} className="flex items-center gap-2">
                   <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-medium tabular-nums text-muted-foreground">

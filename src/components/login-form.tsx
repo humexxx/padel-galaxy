@@ -60,7 +60,6 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"form">)
     try {
       if (mode === "signin") {
         await signInWithEmail(email, password)
-        toast.success("Bienvenido a Padel Galaxy")
       } else {
         await signUpWithEmail(email, password)
         toast.success("Cuenta creada")
@@ -77,7 +76,6 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"form">)
     setGoogleLoading(true)
     try {
       await signInWithGoogle()
-      toast.success("Bienvenido a Padel Galaxy")
       goNext()
     } catch (err) {
       toast.error(describeAuthError(err))

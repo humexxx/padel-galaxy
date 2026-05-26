@@ -11,8 +11,8 @@ import {
   type Unsubscribe,
 } from "firebase/firestore"
 
+import { normalizeEmail } from "@/lib/email"
 import { db } from "@/lib/firebase"
-import { normalizeEmail } from "@/lib/user-profile"
 
 const COLLECTION = "adminInvites"
 

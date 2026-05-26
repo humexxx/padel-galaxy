@@ -30,7 +30,17 @@ function parseScore(value: string): number | null {
   return n
 }
 
-export function MatchCard({ match, playerById, onSubmit, readOnly }: Props) {
+export const MatchCard = React.memo(MatchCardImpl)
+
+/**
+ * Implementation behind the memoized export. React.memo bails out on
+ * re-renders when none of (match, playerById, onSubmit, readOnly) changed by
+ * reference. Combined with the always-fresh `pozoRef` in `usePozo`, the
+ * parent's `onSubmit` (= recordResult) and `playerById` stay stable across
+ * the 1 Hz timer tick — so cards only re-render when their own match
+ * actually changes (Firestore push, local edit) or the readOnly flag flips.
+ */
+function MatchCardImpl({ match, playerById, onSubmit, readOnly }: Props) {
   const [gamesA, setGamesA] = React.useState(match.gamesA?.toString() ?? "")
   const [gamesB, setGamesB] = React.useState(match.gamesB?.toString() ?? "")
   const [saveState, setSaveState] = React.useState<SaveState>("idle")

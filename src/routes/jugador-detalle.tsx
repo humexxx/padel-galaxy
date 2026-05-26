@@ -73,6 +73,49 @@ const RANGE_DAYS: Record<DateRange, number | null> = {
   all: null,
 }
 
+/**
+ * Tooltip renderer factory. Defined at module scope so we can build a fresh
+ * closure per render (keyed by `metricLabel`) WITHOUT creating an inline
+ * fat-arrow on every render — that would invalidate any internal memo inside
+ * `<LineChart>` and re-render the recharts subtree unnecessarily.
+ */
+function renderTooltip(metricLabel: string) {
+  return (p: Record<string, number | string | null>) => (
+    <>
+      <div className="font-semibold">{String(p.pozoName)}</div>
+      <div className="text-muted-foreground">
+        {new Date(Number(p.date)).toLocaleDateString("es-AR", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        })}
+      </div>
+      <div className="mt-2 flex items-center gap-2">
+        <span
+          aria-hidden
+          className="size-2 shrink-0 rounded-full"
+          style={{ background: "var(--color-primary)" }}
+        />
+        {metricLabel}:{" "}
+        <span className="font-semibold text-foreground">
+          {p.value != null ? String(p.value) : "—"}
+        </span>
+      </div>
+      <div className="mt-1 flex items-center gap-2">
+        <span
+          aria-hidden
+          className="size-2 shrink-0 rounded-full"
+          style={{ background: "var(--color-chart-2)" }}
+        />
+        Posición:{" "}
+        <span className="font-semibold text-foreground">
+          {p.finalPosition != null ? `${p.finalPosition}°` : "—"}
+        </span>
+      </div>
+    </>
+  )
+}
+
 export function JugadorDetallePage() {
   const params = useParams<{ id: string }>()
   const id = params.id ?? ""
@@ -91,15 +134,21 @@ export function JugadorDetallePage() {
 
   // If the user arrived via Link state.from (e.g. clicking a player's name
   // inside a pozo detail or group detail), the back arrow returns to that URL.
-  // Otherwise we fall back to the players roster.
-  const backTo = React.useMemo(() => {
-    const state = location.state as { from?: string } | null
-    return typeof state?.from === "string" ? state.from : "/jugadores"
-  }, [location.state])
+  // Otherwise we fall back to the players roster. Plain const — the
+  // expression is cheap enough that `useMemo` would add overhead.
+  const fromState = location.state as { from?: string } | null
+  const backTo = typeof fromState?.from === "string" ? fromState.from : "/jugadores"
 
-  function handleBack() {
+  const handleBack = React.useCallback(() => {
     navigate(backTo)
-  }
+  }, [navigate, backTo])
+
+  // Stable tooltip renderer per `metric` so the recharts subtree doesn't see
+  // a new prop reference on unrelated re-renders (e.g. filter changes).
+  const tooltipRenderer = React.useMemo(
+    () => renderTooltip(METRIC_LABELS[metric]),
+    [metric],
+  )
 
   // Metric IS the StandingsSort — pass it straight through. Switching the
   // tab re-fetches history with positions recomputed against that ranking.
@@ -250,40 +299,7 @@ export function JugadorDetallePage() {
                   month: "short",
                 })
               }
-              tooltipLabel={(p) => (
-                <>
-                  <div className="font-semibold">{String(p.pozoName)}</div>
-                  <div className="text-muted-foreground">
-                    {new Date(Number(p.date)).toLocaleDateString("es-AR", {
-                      day: "2-digit",
-                      month: "short",
-                      year: "numeric",
-                    })}
-                  </div>
-                  <div className="mt-2 flex items-center gap-2">
-                    <span
-                      aria-hidden
-                      className="size-2 shrink-0 rounded-full"
-                      style={{ background: "var(--color-primary)" }}
-                    />
-                    {METRIC_LABELS[metric]}:{" "}
-                    <span className="font-semibold text-foreground">
-                      {p.value != null ? String(p.value) : "—"}
-                    </span>
-                  </div>
-                  <div className="mt-1 flex items-center gap-2">
-                    <span
-                      aria-hidden
-                      className="size-2 shrink-0 rounded-full"
-                      style={{ background: "var(--color-chart-2)" }}
-                    />
-                    Posición:{" "}
-                    <span className="font-semibold text-foreground">
-                      {p.finalPosition != null ? `${p.finalPosition}°` : "—"}
-                    </span>
-                  </div>
-                </>
-              )}
+              tooltipLabel={tooltipRenderer}
             />
           )}
 

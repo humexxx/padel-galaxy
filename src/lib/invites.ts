@@ -7,9 +7,9 @@ import {
   where,
 } from "firebase/firestore"
 
+import { normalizeEmail } from "@/lib/email"
 import { db } from "@/lib/firebase"
 import { updatePlayer, type PlayerRecord } from "@/lib/players"
-import { normalizeEmail } from "@/lib/user-profile"
 
 /**
  * Send a player invitation via the Firebase "Trigger Email from Firestore"

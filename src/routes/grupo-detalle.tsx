@@ -1,6 +1,13 @@
 import * as React from "react"
 import { Link, useParams } from "react-router"
 import { ArrowLeftIcon, FolderIcon } from "lucide-react"
+// NOTE: we don't use the shared `<LineChart>` (src/components/ui/line-chart.tsx)
+// here on purpose. That component is single-series with optional secondary
+// axis — designed for the player-detail page. This view needs N dynamic
+// lines (one per visible player), per-line color toggles, and a multi-row
+// rich tooltip. Generalizing `<LineChart>` to cover both use cases would
+// bloat its API; recharts is already lazy-loaded per route so there's no
+// bundle cost to keeping the implementations separate.
 import {
   CartesianGrid,
   Line,

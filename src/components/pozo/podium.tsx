@@ -19,6 +19,8 @@ type Position = {
   delay: number
 }
 
+// Pre-sorted by `order` at module scope — the array is immutable and small,
+// so doing it here once avoids re-sorting on every podium render.
 const POSITIONS: Position[] = [
   {
     index: 1,
@@ -47,7 +49,7 @@ const POSITIONS: Position[] = [
     icon: TrophyIcon,
     delay: 0,
   },
-]
+].sort((a, b) => a.order - b.order)
 
 export function Podium({ standings }: Props) {
   const top3 = POSITIONS.map((p) => ({ ...p, player: standings[p.index] })).filter(
@@ -56,11 +58,9 @@ export function Podium({ standings }: Props) {
 
   return (
     <div className="flex w-full items-end justify-center gap-2 sm:gap-4">
-      {top3
-        .sort((a, b) => a.order - b.order)
-        .map(({ index, label, size, bg, player, icon: Icon, delay }) => (
-          <motion.div
-            key={index}
+      {top3.map(({ index, label, size, bg, player, icon: Icon, delay }) => (
+        <motion.div
+          key={index}
             initial={{ y: 60, opacity: 0, scaleY: 0.6 }}
             animate={{ y: 0, opacity: 1, scaleY: 1 }}
             transition={{

@@ -1,25 +1,31 @@
 import { motion } from "framer-motion"
 
+import { useNow } from "@/hooks/use-now"
 import { cn } from "@/lib/utils"
 import { formatDuration } from "@/lib/time"
 
 type Props = {
   label: string
   endsAt: number
-  now: number
   variant?: "warmup" | "play"
   /** "large" makes the timer visually dominant — used during warmup when
    * there's nothing else on screen. "default" is the in-play compact size. */
   size?: "default" | "large"
 }
 
+/**
+ * Self-contained timer: owns its own `useNow` subscription so the 1 Hz tick
+ * only re-renders THIS component, not the entire parent tree. Pulling the
+ * tick up to a parent forced every sibling (MatchCards, StandingsTable, etc.)
+ * to re-render 60×/min during a pozo for no useful reason.
+ */
 export function PozoTimer({
   label,
   endsAt,
-  now,
   variant = "play",
   size = "default",
 }: Props) {
+  const now = useNow(1000)
   const remaining = Math.max(0, endsAt - now)
   const ended = remaining === 0
   const isLarge = size === "large"

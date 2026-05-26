@@ -1,5 +1,3 @@
-"use client"
-
 import * as React from "react"
 import { CheckIcon, ChevronsUpDownIcon, PlusIcon, UserIcon } from "lucide-react"
 

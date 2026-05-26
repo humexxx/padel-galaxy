@@ -48,7 +48,6 @@ import { Podium } from "@/components/pozo/podium"
 import { PozoStatusBadge } from "@/components/pozo/status-badge"
 import { PozoTimer } from "@/components/pozo/pozo-timer"
 import { StandingsTable } from "@/components/pozo/standings-table"
-import { useNow } from "@/hooks/use-now"
 import {
   advanceRound,
   beginPlay,
@@ -71,7 +70,6 @@ type Props = {
 export function PozoView({ pozo, onUpdate }: Props) {
   const navigate = useNavigate()
   const { isAdmin } = useAuth()
-  const now = useNow(1000)
   const playerById = React.useMemo(
     () => new Map(pozo.players.map((p) => [p.id, p])),
     [pozo.players],
@@ -120,12 +118,18 @@ export function PozoView({ pozo, onUpdate }: Props) {
   const warmupEndsAt = pozo.warmupEndsAt ?? 0
   const endsAt = pozo.endsAt ?? 0
 
-  function recordResult(matchId: string, gamesA: number, gamesB: number) {
-    // Auto-save lives in MatchCard now (with its own ephemeral indicator),
-    // so we don't toast on every keystroke. The card shows "Guardando…" /
-    // "Guardado" briefly above the score inputs.
-    onUpdate((p) => recordMatchResult(p, matchId, gamesA, gamesB))
-  }
+  // Stable identity so memoized MatchCards don't bust their cache on every
+  // parent render. `onUpdate` from `usePozo` is itself dep-less (reads from
+  // a ref), so this callback is too.
+  const recordResult = React.useCallback(
+    (matchId: string, gamesA: number, gamesB: number) => {
+      // Auto-save lives in MatchCard now (with its own ephemeral indicator),
+      // so we don't toast on every keystroke. The card shows "Guardando…" /
+      // "Guardado" briefly above the score inputs.
+      onUpdate((p) => recordMatchResult(p, matchId, gamesA, gamesB))
+    },
+    [onUpdate],
+  )
 
   function handleNextRound() {
     onUpdate((p) => advanceRound(p))
@@ -175,7 +179,6 @@ export function PozoView({ pozo, onUpdate }: Props) {
       <PozoTimer
         label={warmupActive ? "Calentamiento" : "Pozo en juego"}
         endsAt={warmupActive ? warmupEndsAt : endsAt}
-        now={now}
         variant={warmupActive ? "warmup" : "play"}
         size={warmupActive ? "large" : "default"}
       />
@@ -434,7 +437,13 @@ function FinishedView({
   onChangeGroup: (groupId: string | undefined) => void
 }) {
   const navigate = useNavigate()
-  const standings = computeStandings(pozo.players, pozo.matches)
+  // Memoized — `sortStandings` re-runs when sort changes and would otherwise
+  // recompute `standings` from scratch every render (FinishedView re-renders
+  // on the `setSort` flip and on every confetti effect tick).
+  const standings = React.useMemo(
+    () => computeStandings(pozo.players, pozo.matches),
+    [pozo.players, pozo.matches],
+  )
   // Sort is lifted here so the podium follows the user's choice in the table.
   const [sort, setSort] = React.useState<StandingsSort>("games")
   const podiumStandings = React.useMemo(
@@ -445,11 +454,28 @@ function FinishedView({
     () => new Map(pozo.players.map((p) => [p.id, p])),
     [pozo.players],
   )
+  // Pre-group matches by round so the renderer below is O(N) instead of
+  // O(rounds × matches). With 10 rounds × 40 matches the old code did 400
+  // filter iterations every render; this builds the map once.
+  const matchesByRound = React.useMemo(() => {
+    const map = new Map<number, typeof pozo.matches>()
+    for (const m of pozo.matches) {
+      const list = map.get(m.round)
+      if (list) list.push(m)
+      else map.set(m.round, [m])
+    }
+    return map
+  }, [pozo.matches])
 
   // Celebrate once when the FinishedView mounts. Idempotent per pozo via the
   // pozo id in the dep array — re-mounting the same pozo doesn't re-fire.
   React.useEffect(() => {
     let cancelled = false
+    // Track timeouts at the effect scope (not inside .then()) so the cleanup
+    // can actually clear them. The cleanup returned from a promise callback
+    // is dropped by React, so any setTimeout queued inside .then() must be
+    // mirrored here to be cancellable.
+    const timeouts: number[] = []
     void import("canvas-confetti").then((mod) => {
       if (cancelled) return
       const confetti = mod.default
@@ -467,17 +493,15 @@ function FinishedView({
           scalar: 0.9,
           colors: ["#fbbf24", "#a3a3a3", "#fb923c", "#6366f1", "#10b981"],
         })
-      const t1 = window.setTimeout(() => fire(0.15, 60), 350)
-      const t2 = window.setTimeout(() => fire(0.85, 120), 500)
-      const t3 = window.setTimeout(() => fire(0.5, 90), 900)
-      return () => {
-        window.clearTimeout(t1)
-        window.clearTimeout(t2)
-        window.clearTimeout(t3)
-      }
+      timeouts.push(
+        window.setTimeout(() => fire(0.15, 60), 350),
+        window.setTimeout(() => fire(0.85, 120), 500),
+        window.setTimeout(() => fire(0.5, 90), 900),
+      )
     })
     return () => {
       cancelled = true
+      for (const id of timeouts) window.clearTimeout(id)
     }
   }, [pozo.id])
 
@@ -513,7 +537,7 @@ function FinishedView({
         </TabsContent>
         <TabsContent value="matches" className="space-y-4">
           {Array.from({ length: pozo.totalRounds }).map((_, roundIndex) => {
-            const matches = pozo.matches.filter((m) => m.round === roundIndex)
+            const matches = matchesByRound.get(roundIndex) ?? []
             if (matches.length === 0) return null
             return (
               <div key={roundIndex} className="space-y-2">

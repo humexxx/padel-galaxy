@@ -52,11 +52,7 @@ import {
   type AdminInvite,
 } from "@/lib/admin-invites"
 import { saveAppSettings } from "@/lib/settings"
-import {
-  normalizeEmail,
-  setUserRole,
-  type UserProfile,
-} from "@/lib/user-profile"
+import { setUserRole, type UserProfile } from "@/lib/user-profile"
 import { cn } from "@/lib/utils"
 
 export function AdminPage() {
@@ -531,6 +527,3 @@ function SignupsToggleCard() {
   )
 }
 
-// Re-export so the lint doesn't complain about unused — keeps the
-// normalizeEmail symbol live for future call-sites in this file.
-export const _normalizeEmail = normalizeEmail

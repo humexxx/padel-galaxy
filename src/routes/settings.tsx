@@ -276,6 +276,10 @@ function ProfileSection({
               disabled={disabled}
               required
             />
+            <Text variant="muted" className="text-xs">
+              Se actualiza en los próximos pozos. Los pozos terminados
+              conservan el nombre que tenías cuando se jugaron.
+            </Text>
           </Field>
           <Field>
             <FieldLabel htmlFor="email">Email</FieldLabel>

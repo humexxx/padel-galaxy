@@ -17,6 +17,11 @@ import { findInvite, deleteInvite } from "@/lib/admin-invites"
 import { normalizeEmail } from "@/lib/email"
 import { db } from "@/lib/firebase"
 import { findInvitedPlayer, linkInvitedPlayer } from "@/lib/invites"
+import {
+  createPlayer,
+  findPlayerByLinkedUid,
+  updatePlayer,
+} from "@/lib/players"
 
 // Re-export so existing callers that imported `normalizeEmail` from this
 // module keep working without touching every call site.
@@ -122,6 +127,12 @@ export async function saveUserProfile({
   // already exists via the merge contract.
   patch.createdAt = patch.createdAt ?? now
   await setDoc(userDoc(uid), patch, { merge: true })
+  // Propagate name changes to the linked /players doc so future pozos
+  // pick up the new name. Past pozos keep their snapshot — see the
+  // doc comment on `syncLinkedPlayerName`.
+  if (typeof displayName === "string") {
+    await syncLinkedPlayerName(uid, displayName)
+  }
 }
 
 /** Default values for a freshly-rendered settings form (no doc yet). */
@@ -174,11 +185,26 @@ export async function ensureUserProfile(args: {
       if (Object.keys(patch).length > 0) {
         patch.updatedAt = now
         await updateDoc(ref, patch)
+        // Mirror the displayName change onto the linked /players doc.
+        // Only runs when patch.displayName was actually set above (i.e.
+        // the value really changed), so we don't write unnecessarily.
+        if (patch.displayName) {
+          await syncLinkedPlayerName(uid, displayName)
+        }
       }
       // Always try to link an unlinked invited-player record — even if the
       // user doc already exists. Covers the case where the organizer added
       // the player invite AFTER the user already had an account.
       await linkInvitedPlayerIfAny(email, uid)
+      // Make sure clientes have a self-owned /players doc so the header
+      // can show "Jugador" → their profile. Idempotent (no-op if the
+      // invite-link path above already attached a doc).
+      await ensureSelfPlayer({
+        uid,
+        displayName: displayName || email.split("@")[0],
+        email,
+        role: data.role,
+      })
       // NOTE: we don't auto-promote a player-role user even if an admin
       // invite is pending for their email — the /users update rule rejects
       // a self-update that changes role. The superadmin promotes them
@@ -196,6 +222,12 @@ export async function ensureUserProfile(args: {
     })
     if (derived === "admin") await consumeAdminInviteIfAny(email)
     await linkInvitedPlayerIfAny(email, uid)
+    await ensureSelfPlayer({
+      uid,
+      displayName: displayName || email.split("@")[0],
+      email,
+      role: derived,
+    })
     return derived
   }
 
@@ -213,6 +245,12 @@ export async function ensureUserProfile(args: {
   await setDoc(ref, { ...profile, _createdAtServer: serverTimestamp() })
   if (role === "admin") await consumeAdminInviteIfAny(email)
   await linkInvitedPlayerIfAny(email, uid)
+  await ensureSelfPlayer({
+    uid,
+    displayName: displayName || email.split("@")[0],
+    email,
+    role,
+  })
   return role
 }
 
@@ -263,6 +301,87 @@ async function linkInvitedPlayerIfAny(email: string, uid: string): Promise<void>
     }
   } catch (err) {
     console.error("linkInvitedPlayerIfAny failed (non-fatal):", err)
+  }
+}
+
+/**
+ * Ensure a cliente has a `/players` doc linked to their account. Runs
+ * after `linkInvitedPlayerIfAny` — if there was a pending invite, that
+ * path already linked an existing record, so this becomes a no-op.
+ * Otherwise we auto-create a fresh self-owned doc so the header can
+ * surface "Jugador" → /jugadores/:id from day 1, before any organizer
+ * touches the roster.
+ *
+ * Skipped for admins/superadmins by convention: they OWN player rosters
+ * but aren't typically IN them. If an admin wants a player profile they
+ * can create one manually (or get added to someone else's pozo).
+ *
+ * The `/players` create rule allows `ownerId == request.auth.uid` with
+ * a non-empty name; we satisfy both with the user's own uid and their
+ * displayName. The `linkedUid` field isn't validated by the rule, so
+ * pre-setting it at create time is fine — the only invariant is that
+ * subsequent updates can't change ownerId, which we don't.
+ *
+ * Errors are swallowed: the user is signed in either way, and the next
+ * auth state change will retry idempotently. We log so an organizer
+ * watching the console notices recurring failures.
+ */
+/**
+ * Propagate a displayName change to the user's linked `/players` doc so
+ * future pozo rosters render the new name. Past pozos keep their
+ * historical `players[].name` snapshot intact — those are denormalized
+ * at the time of the pozo, not foreign keys, which is the correct
+ * behavior for archived sport results (you don't rewrite history when
+ * someone changes their handle).
+ *
+ * Called from two places:
+ *   - `saveUserProfile` when the user edits their name in /settings
+ *   - `ensureUserProfile` when we detect drift from the Google profile
+ *
+ * The cliente is `ownerId` of their auto-created /players doc, so the
+ * Firestore update rule passes (owner branch + name length check).
+ * Idempotent: no-op if name didn't actually change, and silently
+ * skipped if the user has no linked record (admin, or invite not yet
+ * sent + accepted).
+ */
+async function syncLinkedPlayerName(uid: string, newName: string): Promise<void> {
+  try {
+    const trimmed = newName.trim()
+    if (!trimmed) return
+    const player = await findPlayerByLinkedUid(uid)
+    if (!player) return
+    if (player.name === trimmed) return
+    await updatePlayer(player.id, { name: trimmed })
+  } catch (err) {
+    console.error("syncLinkedPlayerName failed (non-fatal):", err)
+  }
+}
+
+async function ensureSelfPlayer(args: {
+  uid: string
+  displayName: string
+  email: string
+  role: UserRole
+}): Promise<void> {
+  if (args.role !== "player") return
+  try {
+    const existing = await findPlayerByLinkedUid(args.uid)
+    if (existing) return
+    // Use Firestore-generated ids for consistency with the rest of the
+    // /players surface (pozo-form does the same: `doc(collection).id`).
+    const id = doc(collection(db, "players")).id
+    const name =
+      args.displayName.trim() ||
+      args.email.split("@")[0] ||
+      "Jugador"
+    await createPlayer({
+      id,
+      ownerId: args.uid,
+      name,
+      linkedUid: args.uid,
+    })
+  } catch (err) {
+    console.error("ensureSelfPlayer failed (non-fatal):", err)
   }
 }
 

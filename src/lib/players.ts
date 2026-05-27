@@ -2,6 +2,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDocs,
   onSnapshot,
   orderBy,
   query,
@@ -81,6 +82,25 @@ export function subscribeUserPlayers(
  * The /players rule allows the linked user to read their own record, so
  * the `where("linkedUid", "==", uid)` query is rule-safe for any caller.
  */
+/**
+ * One-shot lookup: does a /players doc with `linkedUid == uid` already
+ * exist? Mirrors `subscribeMyPlayer` but uses `getDocs` so callers (e.g.
+ * the signup-time auto-create check in `ensureSelfPlayer`) can await a
+ * single answer instead of subscribing.
+ *
+ * Returns the first matching record (there should only ever be one —
+ * the auto-create + invite-link paths both check before writing) or
+ * null if none.
+ */
+export async function findPlayerByLinkedUid(
+  uid: string,
+): Promise<PlayerRecord | null> {
+  const q = query(collection(db, COLLECTION), where("linkedUid", "==", uid))
+  const snap = await getDocs(q)
+  if (snap.empty) return null
+  return snap.docs[0].data() as PlayerRecord
+}
+
 export function subscribeMyPlayer(
   uid: string,
   onData: (player: PlayerRecord | null) => void,
@@ -121,12 +141,23 @@ type CreatePlayerInput = {
   id: string
   ownerId: string
   name: string
+  /**
+   * Pre-link this record to a user account at creation time. Used by the
+   * cliente self-signup path where the new user owns AND is the linked
+   * user of their own player record — they need a profile to land on
+   * from day 1, before any organizer invite reaches them.
+   *
+   * Organizers creating a roster slot (the common case) leave this off
+   * so the record stays unlinked until the invitee claims it.
+   */
+  linkedUid?: string
 }
 
 export async function createPlayer({
   id,
   ownerId,
   name,
+  linkedUid,
 }: CreatePlayerInput): Promise<PlayerRecord> {
   const trimmed = name.trim()
   const now = Date.now()
@@ -135,7 +166,7 @@ export async function createPlayer({
     ownerId,
     name: trimmed,
     nameLower: normalizeName(trimmed),
-    linkedUid: null,
+    linkedUid: linkedUid ?? null,
     invitedEmail: null,
     invitedAt: null,
     createdAt: now,

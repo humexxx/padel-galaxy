@@ -475,13 +475,22 @@ export function PozoForm() {
             </div>
             <div className="rounded-lg bg-muted/60 p-4 text-sm">
               <p className="text-muted-foreground">Tiempo estimado por partido</p>
-              <p className="mt-1 text-2xl font-bold tabular-nums">
-                {matchDurationMin > 0 ? `${matchDurationMin.toFixed(1)} min` : "—"}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {totalRounds} {totalRounds === 1 ? "ronda" : "rondas"} ·{" "}
-                {totalRounds * courts} {totalRounds * courts === 1 ? "partido" : "partidos"} totales
-              </p>
+              {totalRounds > 0 ? (
+                <>
+                  <p className="mt-1 text-2xl font-bold tabular-nums">
+                    {matchDurationMin.toFixed(1)} min
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {totalRounds} {totalRounds === 1 ? "ronda" : "rondas"} ·{" "}
+                    {totalRounds * courts}{" "}
+                    {totalRounds * courts === 1 ? "partido" : "partidos"} totales
+                  </p>
+                </>
+              ) : (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Cargá jugadores abajo para ver cuánto dura cada partido.
+                </p>
+              )}
             </div>
           </FieldGroup>
         </CardContent>

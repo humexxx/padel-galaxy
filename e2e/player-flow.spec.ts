@@ -27,11 +27,13 @@ test.describe("Player (role=player) flow", () => {
     await expect(page.getByRole("link", { name: /^Jugadores$/ })).toHaveCount(0)
   })
 
-  test("the cliente sees 'Mi perfil' deep-linking to their own player detail", async ({
+  test("the cliente sees 'Jugador' deep-linking to their own player detail", async ({
     page,
   }) => {
     await signInAs(page, PLAYER.email, PLAYER.password)
-    const profileLink = page.getByRole("link", { name: /^Mi perfil$/ })
+    // The header swaps the plural admin-roster link ("Jugadores") for a
+    // singular "Jugador" pointing at the cliente's own /jugadores/:id.
+    const profileLink = page.getByRole("link", { name: /^Jugador$/ })
     await expect(profileLink).toBeVisible()
     await profileLink.click()
     // The link resolves to /jugadores/<linkedPlayer.id> — the seed makes

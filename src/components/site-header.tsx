@@ -61,16 +61,20 @@ export function SiteHeader() {
     const base: NavItem[] = [
       { label: "Pozos", to: "/pozos", matchPrefix: "/pozos" },
     ]
-    // Admins see the full roster page (/jugadores). Clientes only see
-    // themselves — deep-link straight to their own /jugadores/:id detail.
+    // Admins see the full roster page (/jugadores) — plural, "Jugadores".
+    // Clientes get the singular "Jugador" that deep-links straight to
+    // their own /jugadores/:id detail. The label switch is intentional:
+    // a cliente has nothing to look at besides themselves, so the plural
+    // would mis-promise a list view they can't access.
+    //
     // A cliente without a linked record (e.g. signed up before any
-    // invite reached them) gets no "perfil" link at all — they have
-    // nothing to see there yet.
+    // invite reached them) gets no "Jugador" link at all — there's
+    // nothing to link TO yet.
     if (isAdmin) {
       base.push({ label: "Jugadores", to: "/jugadores", matchPrefix: "/jugadores" })
     } else if (myPlayer) {
       base.push({
-        label: "Mi perfil",
+        label: "Jugador",
         to: `/jugadores/${myPlayer.id}`,
         matchPrefix: "/jugadores",
       })

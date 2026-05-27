@@ -53,6 +53,17 @@ export default defineConfig({
           // Force the app to talk to the emulators (auth on 9099, firestore
           // on 8080). The seed script below populates the same projectId.
           VITE_USE_FIREBASE_EMULATORS: "1",
+          // Override the prod-projectId from .env.local with the e2e one.
+          // The emulator namespaces data by projectId — without this, the
+          // seed writes (under "padel-galaxy-e2e") and the browser queries
+          // (under whatever .env.local has) live in different namespaces,
+          // and any cross-flow test (e.g. the player seeing a seeded
+          // linked /players doc) silently sees zero rows.
+          //
+          // The other VITE_FIREBASE_* values don't matter for emulator
+          // mode (the API key is fake, the auth domain is unused), but
+          // the projectId IS used to route Firestore reads/writes.
+          VITE_FIREBASE_PROJECT_ID: "padel-galaxy-e2e",
         },
       },
 })

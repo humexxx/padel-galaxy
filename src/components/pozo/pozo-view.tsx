@@ -93,6 +93,25 @@ export function PozoView({ pozo, onUpdate }: Props) {
   const viewedMatches = pozo.matches.filter((m) => m.round === safeViewed)
   const isViewingCurrent = safeViewed === pozo.currentRound
 
+  // Stable identity so memoized MatchCards don't bust their cache on every
+  // parent render. `onUpdate` from `usePozo` is itself dep-less (reads from
+  // a ref), so this callback is too.
+  //
+  // MUST stay above the early-return branches below — otherwise the hook
+  // count changes when `pozo.status` transitions from "draft" → "warmup"
+  // (when the user clicks "Empezar"), which trips the Rules of Hooks
+  // check and crashes with "Rendered more hooks than during the previous
+  // render."
+  const recordResult = React.useCallback(
+    (matchId: string, gamesA: number, gamesB: number) => {
+      // Auto-save lives in MatchCard now (with its own ephemeral indicator),
+      // so we don't toast on every keystroke. The card shows "Guardando…" /
+      // "Guardado" briefly above the score inputs.
+      onUpdate((p) => recordMatchResult(p, matchId, gamesA, gamesB))
+    },
+    [onUpdate],
+  )
+
   if (pozo.status === "draft") {
     return (
       <PozoDraftView
@@ -117,19 +136,6 @@ export function PozoView({ pozo, onUpdate }: Props) {
   const warmupActive = pozo.status === "warmup" && pozo.warmupEndsAt !== null
   const warmupEndsAt = pozo.warmupEndsAt ?? 0
   const endsAt = pozo.endsAt ?? 0
-
-  // Stable identity so memoized MatchCards don't bust their cache on every
-  // parent render. `onUpdate` from `usePozo` is itself dep-less (reads from
-  // a ref), so this callback is too.
-  const recordResult = React.useCallback(
-    (matchId: string, gamesA: number, gamesB: number) => {
-      // Auto-save lives in MatchCard now (with its own ephemeral indicator),
-      // so we don't toast on every keystroke. The card shows "Guardando…" /
-      // "Guardado" briefly above the score inputs.
-      onUpdate((p) => recordMatchResult(p, matchId, gamesA, gamesB))
-    },
-    [onUpdate],
-  )
 
   function handleNextRound() {
     onUpdate((p) => advanceRound(p))
@@ -413,7 +419,7 @@ function PozoDraftView({
             <Stat label="Partidos" value={pozo.totalRounds * pozo.config.courts} />
           </div>
           <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:justify-center">
-            <Button variant="outline" onClick={onBack}>
+            <Button variant="outline" size="lg" onClick={onBack}>
               Volver
             </Button>
             <Button size="lg" onClick={onStart}>

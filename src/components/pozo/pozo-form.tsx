@@ -255,7 +255,6 @@ export function PozoForm() {
         },
       })
       await savePozo(pozo)
-      toast.success("Pozo creado")
       navigate(`/pozos/${pozo.id}`)
     } catch (err) {
       console.error(err)
@@ -543,7 +542,7 @@ export function PozoForm() {
       )}
 
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
-        <Button type="button" variant="outline" onClick={() => navigate(-1)}>
+        <Button type="button" variant="outline" size="lg" onClick={() => navigate(-1)}>
           Cancelar
         </Button>
         <Button type="submit" disabled={errors.length > 0 || submitting} size="lg">

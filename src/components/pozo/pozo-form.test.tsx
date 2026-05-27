@@ -111,8 +111,20 @@ vi.mock("@/lib/players", async (importOriginal) => {
 })
 
 const savePozoMock = vi.fn<(pozo: Pozo) => Promise<void>>(async () => undefined)
+// Full mock of /lib/storage. We can't use `importOriginal` here because
+// the real module imports the Firestore SDK which needs an initialized
+// `db` — the test runs without one and the SDK throws `_freezeSettings`
+// on import. The form indirectly pulls in `usePozos`, which in turn
+// imports the whole storage surface (subscribe* + save/remove), so each
+// needs an inert stub or it'll break at hook-effect time.
+const noopUnsub = () => undefined
 vi.mock("@/lib/storage", () => ({
   savePozo: (pozo: Pozo) => savePozoMock(pozo),
+  removePozo: async () => undefined,
+  subscribePozo: () => noopUnsub,
+  subscribeUserPozos: () => noopUnsub,
+  subscribeAllPozos: () => noopUnsub,
+  subscribeParticipantPozos: () => noopUnsub,
 }))
 
 let generatedIdCounter = 0

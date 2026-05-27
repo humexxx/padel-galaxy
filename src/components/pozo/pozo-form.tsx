@@ -33,7 +33,11 @@ import { useGroups } from "@/hooks/use-groups"
 import { usePlayers } from "@/hooks/use-players"
 import { usePozos } from "@/hooks/use-pozos"
 import { db } from "@/lib/firebase"
-import { createGroup, findGroupByName } from "@/lib/groups"
+import {
+  createGroup,
+  findGroupByName,
+  syncGroupParticipants,
+} from "@/lib/groups"
 import { createPlayer, findPlayerByName, normalizeName } from "@/lib/players"
 import { computeTotalRounds, defaultMatchesPerPlayer } from "@/lib/pozo/algorithms"
 import { DEFAULT_CONFIG, createPozo, computeMatchDurationMin } from "@/lib/pozo/factory"
@@ -286,6 +290,18 @@ export function PozoForm() {
         },
       })
       await savePozo(pozo)
+      // Denormalize this pozo's linked participants onto the group so
+      // clientes can read the group doc via the participant rule branch.
+      // Errors here aren't fatal — the pozo is already saved, the worst
+      // outcome is that the cliente doesn't see the group in their /pozos
+      // > Grupos tab until the next pozo save re-runs the sync.
+      if (groupId && pozo.linkedUids && pozo.linkedUids.length > 0) {
+        try {
+          await syncGroupParticipants(groupId, pozo.linkedUids)
+        } catch (err) {
+          console.error("syncGroupParticipants failed (non-fatal):", err)
+        }
+      }
       navigate(`/pozos/${pozo.id}`)
     } catch (err) {
       console.error(err)

@@ -1,4 +1,5 @@
 import {
+  arrayUnion,
   collection,
   deleteDoc,
   doc,
@@ -28,6 +29,14 @@ export type GroupRecord = {
   name: string
   /** lowercased, accent-stripped name for case-insensitive search */
   nameLower: string
+  /**
+   * Denormalized union of all `linkedUids` from pozos belonging to this
+   * group. Lets clientes query their groups without owning them — same
+   * pattern pozos use to expose participation. Optional for back-compat:
+   * groups created before this field shipped won't have it until the
+   * next pozo save (or the backfill script) populates it.
+   */
+  participantUids?: string[]
   createdAt: number
   updatedAt: number
 }
@@ -75,6 +84,59 @@ export function subscribeAllGroups(
     },
     onError,
   )
+}
+
+/**
+ * Cliente view: groups the user participates in via at least one pozo.
+ * Matches the rule branch `auth.uid in resource.data.participantUids`,
+ * which `syncGroupParticipants` populates whenever a pozo with linked
+ * players is saved. Doesn't include groups the user owns but never put
+ * a pozo into — those still get picked up by `subscribeUserGroups` on
+ * the OR-merge side of the caller.
+ */
+export function subscribeParticipantGroups(
+  uid: string,
+  onData: (groups: GroupRecord[]) => void,
+  onError?: (err: Error) => void,
+): Unsubscribe {
+  // No orderBy here: combining array-contains with orderBy on a
+  // different field would require a composite index, and `useGroups`
+  // already sorts the merged result client-side anyway. Participant
+  // sets are small (a cliente's groups, not a roster), so the lack of
+  // server-side sort is irrelevant.
+  const q = query(
+    collection(db, COLLECTION),
+    where("participantUids", "array-contains", uid),
+  )
+  return onSnapshot(
+    q,
+    (snap) => {
+      onData(snap.docs.map((d) => d.data() as GroupRecord))
+    },
+    onError,
+  )
+}
+
+/**
+ * arrayUnion the given uids onto `/groups/{groupId}.participantUids`.
+ * Called from pozo-form right after `savePozo` so a cliente whose uid
+ * is in the pozo's `linkedUids` can immediately read the group via the
+ * participant rule branch.
+ *
+ * Idempotent: arrayUnion drops duplicates server-side, so repeat calls
+ * with overlapping uid sets are cheap (one write, no growth). Empty
+ * uids list short-circuits so we don't burn a write for a pozo with no
+ * linked participants.
+ */
+export async function syncGroupParticipants(
+  groupId: string,
+  uids: readonly string[],
+): Promise<void> {
+  if (uids.length === 0) return
+  await updateDoc(groupDoc(groupId), {
+    participantUids: arrayUnion(...uids),
+    updatedAt: Date.now(),
+  })
 }
 
 type CreateGroupInput = {

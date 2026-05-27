@@ -195,7 +195,7 @@ export async function ensureUserProfile(args: {
       // Always try to link an unlinked invited-player record — even if the
       // user doc already exists. Covers the case where the organizer added
       // the player invite AFTER the user already had an account.
-      await linkInvitedPlayerIfAny(email, uid)
+      await linkInvitedPlayerIfAny(email, uid, emailVerified)
       // Make sure clientes have a self-owned /players doc so the header
       // can show "Jugador" → their profile. Idempotent (no-op if the
       // invite-link path above already attached a doc).
@@ -221,7 +221,7 @@ export async function ensureUserProfile(args: {
       updatedAt: now,
     })
     if (derived === "admin") await consumeAdminInviteIfAny(email)
-    await linkInvitedPlayerIfAny(email, uid)
+    await linkInvitedPlayerIfAny(email, uid, emailVerified)
     await ensureSelfPlayer({
       uid,
       displayName: displayName || email.split("@")[0],
@@ -244,7 +244,7 @@ export async function ensureUserProfile(args: {
   }
   await setDoc(ref, { ...profile, _createdAtServer: serverTimestamp() })
   if (role === "admin") await consumeAdminInviteIfAny(email)
-  await linkInvitedPlayerIfAny(email, uid)
+  await linkInvitedPlayerIfAny(email, uid, emailVerified)
   await ensureSelfPlayer({
     uid,
     displayName: displayName || email.split("@")[0],
@@ -293,7 +293,18 @@ async function consumeAdminInviteIfAny(email: string): Promise<void> {
  *   - If another tab already linked them, the rule rejects (linkedUid
  *     != null) and that's fine.
  */
-async function linkInvitedPlayerIfAny(email: string, uid: string): Promise<void> {
+async function linkInvitedPlayerIfAny(
+  email: string,
+  uid: string,
+  emailVerified: boolean,
+): Promise<void> {
+  // The /players read rule's invite-email branch requires
+  // `hasVerifiedEmail()`, so an unverified user querying
+  // `where invitedEmail == ...` always hits a PERMISSION_DENIED.
+  // Skip the query entirely in that case — there's no way to satisfy
+  // the rule until the user verifies their email, so any pending
+  // invite stays parked for the next signin after verification.
+  if (!emailVerified) return
   try {
     const player = await findInvitedPlayer(email)
     if (player && player.linkedUid !== uid) {

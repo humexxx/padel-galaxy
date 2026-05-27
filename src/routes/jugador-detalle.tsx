@@ -124,6 +124,11 @@ export function JugadorDetallePage() {
   const navigate = useNavigate()
   const { player, hydrated } = usePlayer(id)
   const { groups } = useGroups()
+  // Inviting an unlinked player is an organizer action. Clientes
+  // landing on this page (e.g. from a group's standings table) get
+  // a read-only view — the rules would reject the write anyway, but
+  // surfacing the form is misleading.
+  const { isAdmin } = useAuth()
   const [metric, setMetric] = React.useState<Metric>("games")
   const [range, setRange] = React.useState<DateRange>("all")
   // Empty Set = no filter (all groups). Each id in the set is included.
@@ -234,7 +239,7 @@ export function JugadorDetallePage() {
         </div>
       </div>
 
-      <InviteCard player={player} />
+      {isAdmin && <InviteCard player={player} />}
 
       <Card>
         <CardHeader>

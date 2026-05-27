@@ -89,6 +89,50 @@ export function subscribeGroupPozos(
   )
 }
 
+/**
+ * Cliente view of a group's pozos: query by participation
+ * (`linkedUids array-contains uid`) and filter `groupId` in-memory.
+ *
+ * Why not a single composite query? `where groupId == X` without an
+ * ownerId filter would return pozos the cliente can't read (rules
+ * deny), and adding `(linkedUids array-contains uid, groupId, ...)`
+ * needs a fresh composite index we can't deploy without elevated GCP
+ * perms. The participant set is small (a cliente's own pozos), so
+ * client-side filter is cheap.
+ *
+ * Sort order matches `subscribeGroupPozos` — `createdAt` ascending —
+ * so downstream chart/aggregation code doesn't need a branch.
+ */
+export function subscribeParticipantGroupPozos(
+  uid: string,
+  groupId: string,
+  onData: (pozos: Pozo[]) => void,
+  onError?: (err: Error) => void,
+): Unsubscribe {
+  // orderBy `createdAt desc` to reuse the existing composite index
+  // `(linkedUids array-contains, createdAt desc)` — adding an ascending
+  // variant would require deploying a new index, which the available
+  // service account can't do. We reverse() in memory so downstream code
+  // (chart + aggregations in `aggregateGroup`) gets the same ascending
+  // order it would from `subscribeGroupPozos`.
+  const q = query(
+    collection(db, "pozos"),
+    where("linkedUids", "array-contains", uid),
+    orderBy("createdAt", "desc"),
+  )
+  return onSnapshot(
+    q,
+    (snap) => {
+      const filtered = snap.docs
+        .map((d) => d.data() as Pozo)
+        .filter((p) => p.groupId === groupId)
+        .reverse()
+      onData(filtered)
+    },
+    onError,
+  )
+}
+
 /** One row per (player, pozo) pair — used for chart points + aggregation. */
 export type PlayerPozoEntry = {
   date: number

@@ -23,6 +23,10 @@ export function createPozo(input: {
   /** Required for pozos created from the UI. The migration script may
    * temporarily create pozos without one, then backfill. */
   groupId?: string
+  /** UIDs of player accounts already linked at creation time. Populated
+   * by the caller from the roster; used so participants can query
+   * `where('linkedUids', 'array-contains', myUid)`. */
+  linkedUids?: string[]
 }): Pozo {
   const players: Player[] = input.players.map((p) => ({
     id: p.id,
@@ -33,6 +37,11 @@ export function createPozo(input: {
     input.config.courts,
     input.config.matchesPerPlayer,
   )
+  // Dedup + drop empties so the array-contains query doesn't get fooled by
+  // duplicate entries when the same user is linked to multiple player IDs.
+  const linkedUids = Array.from(
+    new Set((input.linkedUids ?? []).filter((u) => typeof u === "string" && u.length > 0)),
+  )
   return {
     id: crypto.randomUUID(),
     ownerId: input.ownerId,
@@ -42,6 +51,7 @@ export function createPozo(input: {
     status: "draft",
     config: input.config,
     players,
+    linkedUids,
     matches: [],
     currentRound: 0,
     totalRounds,

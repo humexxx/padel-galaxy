@@ -69,7 +69,11 @@ type Props = {
 
 export function PozoView({ pozo, onUpdate }: Props) {
   const navigate = useNavigate()
-  const { isAdmin } = useAuth()
+  const { user, isAdmin } = useAuth()
+  // A non-owner non-admin participant can read the pozo (firestore.rules
+  // expose it via `linkedUids`) but the rules reject any write. Mirror
+  // that here so the UI never offers controls that would fail.
+  const canEdit = isAdmin || pozo.ownerId === user?.uid
   const playerById = React.useMemo(
     () => new Map(pozo.players.map((p) => [p.id, p])),
     [pozo.players],
@@ -116,9 +120,14 @@ export function PozoView({ pozo, onUpdate }: Props) {
     return (
       <PozoDraftView
         pozo={pozo}
+        canEdit={canEdit}
         onStart={() => onUpdate((p) => startPozo(p))}
         onBack={() => navigate("/pozos")}
-        onChangeGroup={(groupId) => onUpdate((p) => ({ ...p, groupId }))}
+        onChangeGroup={
+          canEdit
+            ? (groupId) => onUpdate((p) => ({ ...p, groupId }))
+            : undefined
+        }
       />
     )
   }
@@ -128,7 +137,11 @@ export function PozoView({ pozo, onUpdate }: Props) {
       <FinishedView
         pozo={pozo}
         onBack={() => navigate("/pozos")}
-        onChangeGroup={(groupId) => onUpdate((p) => ({ ...p, groupId }))}
+        onChangeGroup={
+          canEdit
+            ? (groupId) => onUpdate((p) => ({ ...p, groupId }))
+            : undefined
+        }
       />
     )
   }
@@ -174,8 +187,8 @@ export function PozoView({ pozo, onUpdate }: Props) {
       <PozoHeader
         pozo={pozo}
         onFinish={handleFinishEarly}
-        showFinish
-        onChangeGroup={handleChangeGroup}
+        showFinish={canEdit}
+        onChangeGroup={canEdit ? handleChangeGroup : undefined}
       />
 
       {/* Single timer instance: keep it mounted across warmup → play so
@@ -189,7 +202,7 @@ export function PozoView({ pozo, onUpdate }: Props) {
         size={warmupActive ? "large" : "default"}
       />
       <AnimatePresence>
-        {warmupActive && (
+        {warmupActive && canEdit && (
           <motion.div
             key="empezar"
             initial={{ opacity: 0, y: -8 }}
@@ -277,12 +290,12 @@ export function PozoView({ pozo, onUpdate }: Props) {
                   match={m}
                   playerById={playerById}
                   onSubmit={recordResult}
-                  readOnly={pozo.status !== "playing"}
+                  readOnly={pozo.status !== "playing" || !canEdit}
                 />
               ))}
             </div>
           )}
-          {isViewingCurrent && (
+          {isViewingCurrent && canEdit && (
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
               {isAdmin && !roundComplete && (
                 <Button
@@ -400,18 +413,27 @@ function PozoDraftView({
   onStart,
   onBack,
   onChangeGroup,
+  canEdit = true,
 }: {
   pozo: Pozo
   onStart: () => void
   onBack: () => void
-  onChangeGroup: (groupId: string | undefined) => void
+  /** Optional: omitted when the viewer can't edit the pozo (read-only view). */
+  onChangeGroup?: (groupId: string | undefined) => void
+  /** Whether the viewer can start the pozo. Defaults to true for backward
+   *  compat with the admin path. */
+  canEdit?: boolean
 }) {
   return (
     <PageContainer>
       <PozoHeader pozo={pozo} onChangeGroup={onChangeGroup} />
       <Card>
         <CardContent className="space-y-4 py-6 text-center">
-          <p className="text-sm text-muted-foreground">Tu pozo está listo para arrancar.</p>
+          <p className="text-sm text-muted-foreground">
+            {canEdit
+              ? "Tu pozo está listo para arrancar."
+              : "Cuando el admin lo arranque vas a poder seguirlo desde acá."}
+          </p>
           <div className="grid grid-cols-2 gap-3 text-left sm:grid-cols-4">
             <Stat label="Calentamiento" value={`${pozo.config.warmupMin} min`} />
             <Stat label="Duración" value={`${pozo.config.totalDurationMin} min`} />
@@ -422,10 +444,12 @@ function PozoDraftView({
             <Button variant="outline" onClick={onBack}>
               Volver
             </Button>
-            <Button onClick={onStart}>
-              <PlayIcon className="size-5" />
-              Comenzar pozo
-            </Button>
+            {canEdit && (
+              <Button onClick={onStart}>
+                <PlayIcon className="size-5" />
+                Comenzar pozo
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -440,7 +464,8 @@ function FinishedView({
 }: {
   pozo: Pozo
   onBack: () => void
-  onChangeGroup: (groupId: string | undefined) => void
+  /** Optional: omitted when the viewer can't edit the pozo (read-only view). */
+  onChangeGroup?: (groupId: string | undefined) => void
 }) {
   const navigate = useNavigate()
   const { isAdmin } = useAuth()

@@ -52,6 +52,15 @@ export type Pozo = {
   status: PozoStatus
   config: PozoConfig
   players: Player[]
+  /**
+   * Denormalized list of Firebase Auth UIDs for the players that have a
+   * linked user account (i.e. `players/{id}.linkedUid` is set). Maintained
+   * so a participant can `where('linkedUids', 'array-contains', myUid)`
+   * to discover the pozos they belong to without owning them. Optional
+   * for backwards-compat with pozos created before this field existed —
+   * they just won't be visible to non-owner participants until re-saved.
+   */
+  linkedUids?: string[]
   matches: Match[]
   currentRound: number
   totalRounds: number

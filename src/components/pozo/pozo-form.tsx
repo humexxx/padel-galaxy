@@ -239,11 +239,23 @@ export function PozoForm() {
         }),
       )
 
+      // Look up linkedUid for each resolved player so participants can
+      // discover this pozo via `where('linkedUids', 'array-contains', uid)`.
+      // The roster is already loaded into local state — no extra Firestore
+      // reads — but new players created during this submit (above) won't
+      // be linked to any account yet, which is fine (their uid will be
+      // null in the lookup).
+      const rosterById = new Map(roster.map((r) => [r.id, r]))
+      const linkedUids = resolved
+        .map((p) => rosterById.get(p.id)?.linkedUid)
+        .filter((u): u is string => typeof u === "string" && u.length > 0)
+
       const pozo = createPozo({
         name,
         players: resolved,
         ownerId: user.uid,
         groupId,
+        linkedUids,
         config: {
           courts,
           matchesPerPlayer,

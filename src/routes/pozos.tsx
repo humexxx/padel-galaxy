@@ -71,11 +71,19 @@ export function PozosPage() {
         </TabsList>
 
         <TabsContent value="pozos" className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {isAdmin && <CreatePozoCard />}
-            {hydrated &&
-              active.map((p) => <PozoCard key={p.id} pozo={p} onDelete={remove} />)}
-          </div>
+          {/* Skip the grid wrapper entirely when there's nothing to show in
+              it — otherwise an empty `grid` div sits between the tabs strip
+              and the empty-state card, adding a phantom gap (the
+              `space-y-4` on the parent counts the empty div as a child). */}
+          {(isAdmin || (hydrated && active.length > 0)) && (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {isAdmin && <CreatePozoCard />}
+              {hydrated &&
+                active.map((p) => (
+                  <PozoCard key={p.id} pozo={p} onDelete={remove} />
+                ))}
+            </div>
+          )}
           {hydrated && active.length === 0 && (
             <EmptyPozosHint canCreate={isAdmin} />
           )}
@@ -114,7 +122,7 @@ function CreatePozoCard() {
 
 function EmptyPozosHint({ canCreate }: { canCreate: boolean }) {
   return (
-    <div className="mt-4 flex flex-col items-center gap-2 rounded-xl border border-dashed bg-card px-6 py-10 text-center">
+    <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed bg-card px-6 py-10 text-center">
       <div className="rounded-full bg-primary/10 p-3 text-primary">
         <TrophyIcon className="size-6" />
       </div>

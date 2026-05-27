@@ -39,6 +39,51 @@ export function subscribeUserPozos(
   )
 }
 
+/**
+ * Pozos where the user is a participant (their uid is in the denormalized
+ * `linkedUids` array). Only matches pozos created after the field was
+ * added — older docs need to be re-saved by the owner to populate it.
+ */
+export function subscribeParticipantPozos(
+  uid: string,
+  onData: (pozos: Pozo[]) => void,
+  onError?: (err: Error) => void,
+): Unsubscribe {
+  const q = query(
+    collection(db, COLLECTION),
+    where("linkedUids", "array-contains", uid),
+    orderBy("createdAt", "desc"),
+  )
+  return onSnapshot(
+    q,
+    (snap) => {
+      onData(snap.docs.map((d) => d.data() as Pozo))
+    },
+    onError,
+  )
+}
+
+/**
+ * Super-admin view: every pozo in the system. Firestore rules
+ * (`/pozos` allow read if isOwner || isAdmin) already authorize this —
+ * we just drop the client-side ownerId filter. Callers MUST gate on
+ * `isSuperAdmin` before invoking; a regular user will hit a permission
+ * error on the first non-owned doc.
+ */
+export function subscribeAllPozos(
+  onData: (pozos: Pozo[]) => void,
+  onError?: (err: Error) => void,
+): Unsubscribe {
+  const q = query(collection(db, COLLECTION), orderBy("createdAt", "desc"))
+  return onSnapshot(
+    q,
+    (snap) => {
+      onData(snap.docs.map((d) => d.data() as Pozo))
+    },
+    onError,
+  )
+}
+
 export function subscribePozo(
   id: string,
   onData: (pozo: Pozo | null) => void,

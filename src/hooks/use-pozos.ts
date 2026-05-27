@@ -4,13 +4,15 @@ import { useAuth } from "@/contexts/auth-context"
 import {
   removePozo,
   savePozo,
+  subscribeAllPozos,
+  subscribeParticipantPozos,
   subscribePozo,
   subscribeUserPozos,
 } from "@/lib/storage"
 import type { Pozo } from "@/lib/pozo/types"
 
 export function usePozos() {
-  const { user } = useAuth()
+  const { user, isSuperAdmin } = useAuth()
   const [pozos, setPozos] = React.useState<Pozo[]>([])
   const [hydrated, setHydrated] = React.useState(false)
 
@@ -21,12 +23,49 @@ export function usePozos() {
       return
     }
     setHydrated(false)
-    const unsub = subscribeUserPozos(user.uid, (list) => {
-      setPozos(list)
-      setHydrated(true)
+
+    // Super-admin sees every pozo in the system — single broad query, no
+    // need to also pull "participant" pozos since `all` already covers them.
+    if (isSuperAdmin) {
+      const unsub = subscribeAllPozos((list) => {
+        setPozos(list)
+        setHydrated(true)
+      })
+      return unsub
+    }
+
+    // Everyone else gets the union of "pozos I own" + "pozos I'm a linked
+    // player in". Merged by id (deduped — owner can also be a participant)
+    // and sorted desc by createdAt to preserve the original ordering.
+    let owned: Pozo[] = []
+    let participant: Pozo[] = []
+    let ownedReady = false
+    let participantReady = false
+    const flush = () => {
+      const byId = new Map<string, Pozo>()
+      for (const p of owned) byId.set(p.id, p)
+      for (const p of participant) if (!byId.has(p.id)) byId.set(p.id, p)
+      const merged = [...byId.values()].sort(
+        (a, b) => b.createdAt - a.createdAt,
+      )
+      setPozos(merged)
+      if (ownedReady && participantReady) setHydrated(true)
+    }
+    const unsubOwned = subscribeUserPozos(user.uid, (list) => {
+      owned = list
+      ownedReady = true
+      flush()
     })
-    return unsub
-  }, [user])
+    const unsubParticipant = subscribeParticipantPozos(user.uid, (list) => {
+      participant = list
+      participantReady = true
+      flush()
+    })
+    return () => {
+      unsubOwned()
+      unsubParticipant()
+    }
+  }, [user, isSuperAdmin])
 
   const save = React.useCallback((pozo: Pozo) => {
     void savePozo(pozo)

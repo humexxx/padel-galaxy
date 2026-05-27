@@ -152,6 +152,25 @@ export function GrupoDetallePage() {
     )
   }, [entries, effectiveVisible, sort, bestPerWeek])
 
+  // Y-axis ticks in steps of 5 so the gridlines stay readable regardless
+  // of the metric scale. Without this Recharts auto-picks 4 ticks and the
+  // spacing drifts (e.g. 0/15/30/45 for games), making it harder to read
+  // exact values.
+  const yTicks = React.useMemo(() => {
+    let max = 0
+    for (const row of chartData) {
+      for (const [k, v] of Object.entries(row)) {
+        if (k === "_x" || k === "date" || k === "pozoName") continue
+        if (typeof v === "number" && v > max) max = v
+      }
+    }
+    if (max === 0) return [0, 5]
+    const top = Math.ceil(max / 5) * 5
+    const ticks: number[] = []
+    for (let t = 0; t <= top; t += 5) ticks.push(t)
+    return ticks
+  }, [chartData])
+
   // Map playerId → color for stable colors across chart re-renders.
   // Must stay above the early returns below — hooks can't be conditional.
   const playerColors = React.useMemo(() => {
@@ -403,6 +422,8 @@ export function GrupoDetallePage() {
                     axisLine={{ stroke: "var(--color-border)" }}
                     allowDecimals={false}
                     width={36}
+                    ticks={yTicks}
+                    domain={[0, yTicks[yTicks.length - 1] ?? "auto"]}
                   />
                   <Tooltip
                     cursor={{ stroke: "var(--color-border)", strokeWidth: 1 }}

@@ -373,7 +373,7 @@ export function GrupoDetallePage() {
               </Text>
             </div>
           ) : (
-            <div className="h-64 w-full sm:h-80">
+            <div className="h-80 w-full sm:h-[26rem]">
               <ResponsiveContainer width="100%" height="100%">
                 <RechartsLineChart
                   data={chartData}

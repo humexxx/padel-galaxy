@@ -41,6 +41,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Heading, Text } from "@/components/ui/typography"
 import { PageContainer } from "@/components/page-container"
+import { useAuth } from "@/contexts/auth-context"
 import { useGroups } from "@/hooks/use-groups"
 import { usePozos } from "@/hooks/use-pozos"
 import { normalizeName } from "@/lib/players"
@@ -99,6 +100,7 @@ function matchesSize(playerCount: number, key: SizeKey): boolean {
 export function HistorialPage() {
   const { pozos, hydrated, remove } = usePozos()
   const { groups } = useGroups()
+  const { isAdmin } = useAuth()
 
   const [search, setSearch] = React.useState("")
   const [range, setRange] = React.useState<RangeKey>("all")
@@ -213,20 +215,24 @@ export function HistorialPage() {
                   ))}
                 </SelectContent>
               </Select>
-              <Select value={size} onValueChange={(v) => v && setSize(v as SizeKey)}>
-                <SelectTrigger className="w-full sm:w-52">
-                  <SelectValue>
-                    {(value) => SIZE_LABELS[(value as SizeKey) ?? "all"]}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {(Object.keys(SIZE_LABELS) as SizeKey[]).map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {SIZE_LABELS[s]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {/* Pozo size filter is an organizer tool — a player typically
+                  only sees a handful of pozos and doesn't slice by size. */}
+              {isAdmin && (
+                <Select value={size} onValueChange={(v) => v && setSize(v as SizeKey)}>
+                  <SelectTrigger className="w-full sm:w-52">
+                    <SelectValue>
+                      {(value) => SIZE_LABELS[(value as SizeKey) ?? "all"]}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(SIZE_LABELS) as SizeKey[]).map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {SIZE_LABELS[s]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
             {filtersActive && (
               <Button variant="ghost" size="sm" onClick={resetFilters}>

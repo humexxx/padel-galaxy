@@ -82,7 +82,7 @@ export function PozosPage() {
         </TabsContent>
 
         <TabsContent value="grupos" className="space-y-4">
-          <GroupsSection />
+          <GroupsSection isAdmin={isAdmin} />
         </TabsContent>
       </Tabs>
     </PageContainer>
@@ -150,7 +150,7 @@ function EmptyPozosHint({ canCreate }: { canCreate: boolean }) {
   )
 }
 
-function GroupsSection() {
+function GroupsSection({ isAdmin }: { isAdmin: boolean }) {
   const { groups, hydrated } = useGroups()
   const [search, setSearch] = React.useState("")
 
@@ -159,6 +159,54 @@ function GroupsSection() {
     if (!q) return groups
     return groups.filter((g) => g.nameLower.includes(q))
   }, [groups, search])
+
+  // Player-tier accounts typically belong to a handful of groups, so a
+  // card grid reads better than a table. Admins manage many groups across
+  // an org and want the dense table.
+  if (!isAdmin) {
+    if (hydrated && groups.length === 0) {
+      return (
+        <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed bg-card px-6 py-10 text-center">
+          <div className="rounded-full bg-muted p-3 text-muted-foreground">
+            <FolderIcon className="size-6" />
+          </div>
+          <Text className="text-base font-semibold">
+            Todavía no estás en ningún grupo
+          </Text>
+          <Text variant="muted" className="max-w-md text-sm">
+            Cuando un admin te incluya en un grupo lo vas a ver acá.
+          </Text>
+        </div>
+      )
+    }
+    return (
+      <div className="space-y-4">
+        {groups.length > 4 && (
+          <div className="relative w-full sm:max-w-xs">
+            <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="search"
+              placeholder="Buscar por nombre…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+        )}
+        {hydrated && filtered.length === 0 ? (
+          <Text variant="muted" className="text-sm">
+            Ningún grupo coincide con el filtro.
+          </Text>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {filtered.map((g) => (
+              <GroupCard key={g.id} group={g} />
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <Card>
@@ -190,6 +238,42 @@ function GroupsSection() {
         )}
       </div>
     </Card>
+  )
+}
+
+function GroupCard({ group }: { group: GroupRecord }) {
+  return (
+    <Link
+      to={`/pozos/grupos/${group.id}`}
+      aria-label={`Abrir grupo ${group.name}`}
+      className={cn(
+        "rounded-xl ring-offset-background transition",
+        "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none",
+      )}
+    >
+      <Card className="flex h-full min-h-36 flex-col gap-3 p-4 transition-colors hover:border-foreground/30">
+        <div className="flex items-center gap-3">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <FolderIcon className="size-5" />
+          </span>
+          <p className="truncate text-sm font-semibold">{group.name}</p>
+        </div>
+        <div className="mt-auto flex items-center justify-between gap-2 text-xs text-muted-foreground">
+          <span>
+            Creado{" "}
+            {new Date(group.createdAt).toLocaleDateString("es-AR", {
+              day: "2-digit",
+              month: "short",
+              year: "numeric",
+            })}
+          </span>
+          <span className="inline-flex items-center gap-1 font-medium text-primary">
+            Abrir
+            <ArrowRightIcon className="size-3" />
+          </span>
+        </div>
+      </Card>
+    </Link>
   )
 }
 

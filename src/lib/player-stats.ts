@@ -1,7 +1,6 @@
 import {
   collection,
   onSnapshot,
-  orderBy,
   query,
   where,
   type Unsubscribe,
@@ -41,36 +40,98 @@ const COLLECTION = "pozos"
  * Subscribe to all FINISHED pozos that include `playerId` in their players[].
  *
  * Firestore can't filter "players array contains object with id == X" without
- * a custom field, so we fetch all of the owner's pozos and filter in-memory.
- * For a typical organizer with tens of pozos, this is fine; if it gets to
- * thousands we'll denormalize `playerIds: string[]` onto the pozo doc.
+ * a denormalized field, so we fetch the caller's accessible pozos and filter
+ * in-memory. "Accessible" is the UNION of:
+ *
+ *   1. Pozos the caller owns (`ownerId == callerUid`) — the organizer/admin
+ *      path. Sees every pozo they created, including ones the target
+ *      `playerId` was added to.
+ *   2. Pozos where the caller is a linked participant
+ *      (`linkedUids array-contains callerUid`) — the cliente self-view path.
+ *      Without this, a cliente looking at their own profile would see nothing
+ *      because they never own pozos.
+ *
+ * Both subscriptions are kept open so the chart updates live. Errors on
+ * either query are logged but don't block the other — if e.g. the
+ * participant query hits a rules edge case, the owner query still streams
+ * its results. The dedupe-by-id step in `flush()` handles the overlap
+ * (the caller is both owner AND participant for a pozo they organized
+ * and also played in).
  */
 export function subscribePlayerHistory(
-  ownerId: string,
+  callerUid: string,
   playerId: string,
   sort: StandingsSort,
   onData: (stats: PlayerPozoStat[]) => void,
   onError?: (err: Error) => void,
 ): Unsubscribe {
-  const q = query(
+  let owned: Pozo[] = []
+  let participant: Pozo[] = []
+  let ownedReady = false
+  let participantReady = false
+
+  function flush() {
+    if (!ownedReady || !participantReady) return
+    const byId = new Map<string, Pozo>()
+    for (const p of owned) byId.set(p.id, p)
+    for (const p of participant) if (!byId.has(p.id)) byId.set(p.id, p)
+
+    const stats: PlayerPozoStat[] = []
+    for (const pozo of byId.values()) {
+      if (pozo.status !== "finished") continue
+      if (!pozo.players.some((p) => p.id === playerId)) continue
+      stats.push(computeStat(pozo, playerId, sort))
+    }
+    // Chronological order so the chart renders left-to-right correctly.
+    stats.sort((a, b) => a.date - b.date)
+    onData(stats)
+  }
+
+  const ownedQ = query(
     collection(db, COLLECTION),
-    where("ownerId", "==", ownerId),
-    orderBy("createdAt", "asc"),
+    where("ownerId", "==", callerUid),
   )
-  return onSnapshot(
-    q,
+  const unsubOwned = onSnapshot(
+    ownedQ,
     (snap) => {
-      const stats: PlayerPozoStat[] = []
-      for (const d of snap.docs) {
-        const pozo = d.data() as Pozo
-        if (pozo.status !== "finished") continue
-        if (!pozo.players.some((p) => p.id === playerId)) continue
-        stats.push(computeStat(pozo, playerId, sort))
-      }
-      onData(stats)
+      owned = snap.docs.map((d) => d.data() as Pozo)
+      ownedReady = true
+      flush()
     },
-    onError,
+    (err) => {
+      console.error("subscribePlayerHistory.owned error:", err)
+      onError?.(err)
+      ownedReady = true
+      flush()
+    },
   )
+
+  const participantQ = query(
+    collection(db, COLLECTION),
+    where("linkedUids", "array-contains", callerUid),
+  )
+  const unsubParticipant = onSnapshot(
+    participantQ,
+    (snap) => {
+      participant = snap.docs.map((d) => d.data() as Pozo)
+      participantReady = true
+      flush()
+    },
+    (err) => {
+      // Don't propagate up — the participant query can fail under the
+      // current rules' static analyzer (Property ownerId is undefined...);
+      // we still want to render whatever the owner query returned plus a
+      // clean empty state otherwise. Logged for ops.
+      console.error("subscribePlayerHistory.participant error:", err)
+      participantReady = true
+      flush()
+    },
+  )
+
+  return () => {
+    unsubOwned()
+    unsubParticipant()
+  }
 }
 
 export function computeStat(

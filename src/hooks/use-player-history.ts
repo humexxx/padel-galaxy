@@ -27,6 +27,15 @@ export function usePlayerHistory(playerId: string, sort: StandingsSort) {
         setHistory(list)
         setHydrated(true)
       },
+      // Belt-and-suspenders: subscribePlayerHistory already swallows its own
+      // per-query errors and flushes empty results, but if it ever surfaces
+      // one we still want hydrated=true so the page renders the empty state
+      // instead of hanging on the loading skeleton forever.
+      (err) => {
+        console.error("usePlayerHistory subscription error:", err)
+        setHistory([])
+        setHydrated(true)
+      },
     )
     return unsub
   }, [user, playerId, sort])

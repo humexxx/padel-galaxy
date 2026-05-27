@@ -51,16 +51,37 @@ export function usePozos() {
       setPozos(merged)
       if (ownedReady && participantReady) setHydrated(true)
     }
-    const unsubOwned = subscribeUserPozos(user.uid, (list) => {
-      owned = list
-      ownedReady = true
-      flush()
-    })
-    const unsubParticipant = subscribeParticipantPozos(user.uid, (list) => {
-      participant = list
-      participantReady = true
-      flush()
-    })
+    const unsubOwned = subscribeUserPozos(
+      user.uid,
+      (list) => {
+        owned = list
+        ownedReady = true
+        flush()
+      },
+      (err) => {
+        // Don't hang hydration if the owner query fails — show whatever
+        // the participant query gave us.
+        console.error("subscribeUserPozos failed:", err)
+        ownedReady = true
+        flush()
+      },
+    )
+    const unsubParticipant = subscribeParticipantPozos(
+      user.uid,
+      (list) => {
+        participant = list
+        participantReady = true
+        flush()
+      },
+      (err) => {
+        // Same idea: if the composite index is still building or the
+        // query is denied, log it and treat the participant set as empty
+        // so the empty-state hint can still render.
+        console.error("subscribeParticipantPozos failed:", err)
+        participantReady = true
+        flush()
+      },
+    )
     return () => {
       unsubOwned()
       unsubParticipant()

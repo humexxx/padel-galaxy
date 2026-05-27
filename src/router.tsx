@@ -86,7 +86,10 @@ export const router = createBrowserRouter([
         children: [
           { path: "/pozos", element: lazyEl(PozosPage) },
           { path: "/pozos/:id", element: lazyEl(PozoDetailPage) },
-          { path: "/jugadores", element: lazyEl(JugadoresPage) },
+          // /jugadores/:id stays accessible to any auth user — the rule
+          // gates per-record (owner / linked cliente / admin / pre-claim
+          // invitee). The roster LIST below is admin-only because it's
+          // the organizer's tool, not relevant for clientes.
           { path: "/jugadores/:id", element: lazyEl(JugadorDetallePage) },
           { path: "/pozos/grupos/:id", element: lazyEl(GrupoDetallePage) },
           // Legacy /grupos/:id route kept as a redirect target (not exposed).
@@ -102,6 +105,10 @@ export const router = createBrowserRouter([
             element: <AppLayout />,
             children: [
               { path: "/pozos/nuevo", element: lazyEl(NuevoPozoPage) },
+              // Roster list is an organizer tool. Clientes get "Mi perfil"
+              // in the header instead, deep-linking to their own
+              // /jugadores/:id detail.
+              { path: "/jugadores", element: lazyEl(JugadoresPage) },
             ],
           },
         ],

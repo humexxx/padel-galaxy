@@ -1,6 +1,6 @@
 import { test, expect, type Page } from "@playwright/test"
 
-import { E2E_USERS } from "./global-setup"
+import { E2E_LINKED_PLAYER_ID, E2E_USERS } from "./global-setup"
 
 const PLAYER = E2E_USERS.player
 
@@ -20,9 +20,40 @@ test.describe("Player (role=player) flow", () => {
 
   test("the Admin nav link is hidden for non-superadmins", async ({ page }) => {
     await signInAs(page, PLAYER.email, PLAYER.password)
-    // Header shows Pozos / Jugadores / Historial but NOT Admin.
+    // Header shows Pozos but NOT Admin (superadmin-only) and NOT
+    // Jugadores (admin-only — clientes get "Mi perfil" instead).
     await expect(page.getByRole("link", { name: /^Pozos$/ })).toBeVisible()
     await expect(page.getByRole("link", { name: /^Admin$/ })).toHaveCount(0)
+    await expect(page.getByRole("link", { name: /^Jugadores$/ })).toHaveCount(0)
+  })
+
+  test("the cliente sees 'Mi perfil' deep-linking to their own player detail", async ({
+    page,
+  }) => {
+    await signInAs(page, PLAYER.email, PLAYER.password)
+    const profileLink = page.getByRole("link", { name: /^Mi perfil$/ })
+    await expect(profileLink).toBeVisible()
+    await profileLink.click()
+    // The link resolves to /jugadores/<linkedPlayer.id> — the seed makes
+    // sure that record exists and is linked to the player user.
+    await page.waitForURL(`**/jugadores/${E2E_LINKED_PLAYER_ID}`)
+    // The detail page renders the player's display name as the headline.
+    await expect(
+      page.getByRole("heading", { name: PLAYER.displayName }),
+    ).toBeVisible()
+  })
+
+  test("/jugadores roster is gated as admin-only — cliente sees the restricted screen", async ({
+    page,
+  }) => {
+    // Going directly to the LIST page should be rejected for non-admins.
+    // The detail (/jugadores/:id) stays accessible — that's what 'Mi perfil'
+    // links to and what the rules permission for linked clientes.
+    await signInAs(page, PLAYER.email, PLAYER.password)
+    await page.goto("/jugadores")
+    await expect(
+      page.getByRole("heading", { name: /Acceso restringido/i }),
+    ).toBeVisible()
   })
 
   test("navigating directly to /admin shows the restricted-access screen", async ({

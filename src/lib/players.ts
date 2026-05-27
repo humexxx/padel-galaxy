@@ -70,6 +70,53 @@ export function subscribeUserPlayers(
   )
 }
 
+/**
+ * Subscribe to the player record linked to a given user uid. Used by the
+ * site header to render "Mi perfil" for cliente-tier users instead of the
+ * organizer's full /jugadores roster. Returns `null` if no /players doc has
+ * `linkedUid == uid` — that's expected for admins (who own the roster but
+ * aren't linked to a player record) and for clientes who haven't been
+ * invited yet.
+ *
+ * The /players rule allows the linked user to read their own record, so
+ * the `where("linkedUid", "==", uid)` query is rule-safe for any caller.
+ */
+export function subscribeMyPlayer(
+  uid: string,
+  onData: (player: PlayerRecord | null) => void,
+  onError?: (err: Error) => void,
+): Unsubscribe {
+  const q = query(collection(db, COLLECTION), where("linkedUid", "==", uid))
+  return onSnapshot(
+    q,
+    (snap) => {
+      onData(snap.empty ? null : (snap.docs[0].data() as PlayerRecord))
+    },
+    onError,
+  )
+}
+
+/**
+ * Super-admin view: every player in the system. Firestore rules allow
+ * `isAdmin` reads on any /players doc, so the broader query is safe.
+ * Callers MUST gate on `isSuperAdmin` — a regular user will hit a
+ * permission error on the first record they don't own AND haven't been
+ * invited to.
+ */
+export function subscribeAllPlayers(
+  onData: (players: PlayerRecord[]) => void,
+  onError?: (err: Error) => void,
+): Unsubscribe {
+  const q = query(collection(db, COLLECTION), orderBy("nameLower", "asc"))
+  return onSnapshot(
+    q,
+    (snap) => {
+      onData(snap.docs.map((d) => d.data() as PlayerRecord))
+    },
+    onError,
+  )
+}
+
 type CreatePlayerInput = {
   id: string
   ownerId: string

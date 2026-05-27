@@ -249,6 +249,37 @@ async function seedOne(user: SeededUser): Promise<void> {
   })
 }
 
+/**
+ * Seeds a /players doc owned by the organizer with `linkedUid` set to the
+ * player user. Mirrors the production state of "cliente accepted invite +
+ * has been linked to a roster record", which is what enables the "Mi
+ * perfil" nav item for the player in the site header.
+ *
+ * Constant id so the player-flow spec can reason about the URL it ends up
+ * on without having to scrape the navigation link.
+ */
+export const E2E_LINKED_PLAYER_ID = "e2e-linked-player"
+
+async function seedLinkedPlayer(
+  organizer: SeededUser,
+  player: SeededUser,
+): Promise<void> {
+  if (!organizer.uid || !player.uid) {
+    throw new Error("seedLinkedPlayer: organizer/player uids not populated")
+  }
+  await seedDoc(`players/${E2E_LINKED_PLAYER_ID}`, {
+    id: E2E_LINKED_PLAYER_ID,
+    ownerId: organizer.uid,
+    name: player.displayName,
+    nameLower: player.displayName.toLowerCase(),
+    linkedUid: player.uid,
+    invitedEmail: player.email.toLowerCase(),
+    invitedAt: 0,
+    createdAt: 0,
+    updatedAt: 0,
+  })
+}
+
 export default async function globalSetup() {
   // eslint-disable-next-line no-console
   console.log(
@@ -256,10 +287,14 @@ export default async function globalSetup() {
   )
   // Run in parallel — the operations don't depend on each other.
   await Promise.all(Object.values(E2E_USERS).map(seedOne))
+  // After every user has a uid, link the player fixture to a roster doc
+  // owned by the organizer. This makes the player's "Mi perfil" nav item
+  // resolve to a real /jugadores/:id page in the player-flow specs.
+  await seedLinkedPlayer(E2E_USERS.organizer, E2E_USERS.player)
   // eslint-disable-next-line no-console
   console.log(
     `[e2e] seed OK (${Object.values(E2E_USERS)
       .map((u) => `${u.key}=${u.uid?.slice(0, 6)}`)
-      .join(", ")})`,
+      .join(", ")}, linkedPlayer=${E2E_LINKED_PLAYER_ID})`,
   )
 }

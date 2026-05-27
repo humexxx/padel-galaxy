@@ -55,6 +55,28 @@ export function subscribeUserGroups(
   )
 }
 
+/**
+ * Super-admin view: every group in the system regardless of `ownerId`.
+ * Firestore rules already allow `isAdmin()` to read any group doc — this
+ * function just drops the client-side `where` filter so the snapshot
+ * actually delivers them. Callers MUST gate on `isSuperAdmin` before
+ * invoking this; a regular user calling it will hit a permission error
+ * for the first non-owned doc.
+ */
+export function subscribeAllGroups(
+  onData: (groups: GroupRecord[]) => void,
+  onError?: (err: Error) => void,
+): Unsubscribe {
+  const q = query(collection(db, COLLECTION), orderBy("nameLower", "asc"))
+  return onSnapshot(
+    q,
+    (snap) => {
+      onData(snap.docs.map((d) => d.data() as GroupRecord))
+    },
+    onError,
+  )
+}
+
 type CreateGroupInput = {
   id: string
   ownerId: string

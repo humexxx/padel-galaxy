@@ -24,6 +24,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useAuth } from "@/contexts/auth-context"
+import { useMyPlayer } from "@/hooks/use-players"
 import { usePozos } from "@/hooks/use-pozos"
 import { cn } from "@/lib/utils"
 
@@ -46,22 +47,40 @@ function initialsFrom(name: string): string {
 
 export function SiteHeader() {
   const location = useLocation()
-  const { isSuperAdmin } = useAuth()
+  const { isAdmin, isSuperAdmin } = useAuth()
   const { pozos } = usePozos()
+  // Used to render "Mi perfil" for cliente-tier users. Admins typically
+  // aren't linked to a /players doc (they OWN the roster, they're not IN
+  // it), so this returns null for them and we keep the wider "Jugadores"
+  // link instead.
+  const { player: myPlayer } = useMyPlayer()
 
   const activeCount = pozos.filter((p) => p.status !== "finished").length
 
   const items: NavItem[] = React.useMemo(() => {
     const base: NavItem[] = [
       { label: "Pozos", to: "/pozos", matchPrefix: "/pozos" },
-      { label: "Jugadores", to: "/jugadores", matchPrefix: "/jugadores" },
-      { label: "Historial", to: "/historial" },
     ]
+    // Admins see the full roster page (/jugadores). Clientes only see
+    // themselves — deep-link straight to their own /jugadores/:id detail.
+    // A cliente without a linked record (e.g. signed up before any
+    // invite reached them) gets no "perfil" link at all — they have
+    // nothing to see there yet.
+    if (isAdmin) {
+      base.push({ label: "Jugadores", to: "/jugadores", matchPrefix: "/jugadores" })
+    } else if (myPlayer) {
+      base.push({
+        label: "Mi perfil",
+        to: `/jugadores/${myPlayer.id}`,
+        matchPrefix: "/jugadores",
+      })
+    }
+    base.push({ label: "Historial", to: "/historial" })
     // /admin is superadmin-only. Regular admins (if any) won't see the
     // link at all — they can't access the page either way (guard enforces).
     if (isSuperAdmin) base.push({ label: "Admin", to: "/admin" })
     return base
-  }, [isSuperAdmin])
+  }, [isAdmin, isSuperAdmin, myPlayer])
 
   function isActive(item: NavItem): boolean {
     if (item.matchPrefix) {

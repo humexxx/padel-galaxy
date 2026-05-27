@@ -1,10 +1,14 @@
 import * as React from "react"
 
 import { useAuth } from "@/contexts/auth-context"
-import { subscribeUserGroups, type GroupRecord } from "@/lib/groups"
+import {
+  subscribeAllGroups,
+  subscribeUserGroups,
+  type GroupRecord,
+} from "@/lib/groups"
 
 export function useGroups() {
-  const { user } = useAuth()
+  const { user, isSuperAdmin } = useAuth()
   const [groups, setGroups] = React.useState<GroupRecord[]>([])
   const [hydrated, setHydrated] = React.useState(false)
 
@@ -15,12 +19,21 @@ export function useGroups() {
       return
     }
     setHydrated(false)
-    const unsub = subscribeUserGroups(user.uid, (list) => {
-      setGroups(list)
-      setHydrated(true)
-    })
+    // Super-admin sees every group in the system. Regular users see only
+    // the ones they own. The Firestore read rule allows `isAdmin` reads
+    // on any /groups doc, so the broader query is safe — see
+    // `subscribeAllGroups` for the rationale.
+    const unsub = isSuperAdmin
+      ? subscribeAllGroups((list) => {
+          setGroups(list)
+          setHydrated(true)
+        })
+      : subscribeUserGroups(user.uid, (list) => {
+          setGroups(list)
+          setHydrated(true)
+        })
     return unsub
-  }, [user])
+  }, [user, isSuperAdmin])
 
   return { groups, hydrated }
 }

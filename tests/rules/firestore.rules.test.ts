@@ -69,9 +69,22 @@ function superAdmin() {
  * rules that look at `request.auth.token.email` (e.g. /adminInvites
  * self-claim, /players invitedEmail). Pass the lowercased email so it
  * matches the rule's `.lower()` normalization.
+ *
+ * Defaults to email_verified=true because that's the common path; tests
+ * for the security guard explicitly pass `{ verified: false }` to assert
+ * that the rule rejects unverified emails.
  */
-function authedAs(uid: string, email: string) {
-  return env.authenticatedContext(uid, { email }).firestore()
+function authedAs(
+  uid: string,
+  email: string,
+  opts: { verified?: boolean } = {},
+) {
+  return env
+    .authenticatedContext(uid, {
+      email,
+      email_verified: opts.verified !== false,
+    })
+    .firestore()
 }
 function anon() {
   return env.unauthenticatedContext().firestore()
@@ -576,6 +589,356 @@ describe("/groups/{id}", () => {
     it("random user cannot delete", async () => {
       await assertFails(deleteDoc(doc(other(), "groups/g1")))
     })
+  })
+})
+
+// ============================================================================
+// SECURITY HARDENING TESTS — email verification, /mail lockdown,
+// player-claim hasOnly, size caps. Added after the security audit.
+// ============================================================================
+
+describe("security: email_verified gates", () => {
+  it("rejects /users create with role='admin' when email is NOT verified", async () => {
+    // Setup: there IS a matching invite, BUT the user's email isn't verified.
+    // This is the exact attacker path: register an unverified account using
+    // an email we know was invited, try to consume the invite.
+    const email = "invited@example.com"
+    await seed(`adminInvites/${email}`, { email, createdAt: 0 })
+    await assertFails(
+      setDoc(
+        doc(authedAs(OWNER, email, { verified: false }), `users/${OWNER}`),
+        {
+          uid: OWNER,
+          email,
+          displayName: "Attacker",
+          preferredSide: "any",
+          role: "admin",
+          createdAt: 0,
+          updatedAt: 0,
+        },
+      ),
+    )
+  })
+
+  it("rejects /adminInvites self-read when email is NOT verified", async () => {
+    const email = "invited@example.com"
+    await seed(`adminInvites/${email}`, { email, createdAt: 0 })
+    await assertFails(
+      getDoc(doc(authedAs(OWNER, email, { verified: false }), `adminInvites/${email}`)),
+    )
+  })
+
+  it("rejects /adminInvites self-delete when email is NOT verified", async () => {
+    const email = "invited@example.com"
+    await seed(`adminInvites/${email}`, { email, createdAt: 0 })
+    await assertFails(
+      deleteDoc(doc(authedAs(OWNER, email, { verified: false }), `adminInvites/${email}`)),
+    )
+  })
+
+  it("rejects /players claim path when email is NOT verified", async () => {
+    // Seed an unclaimed player invite for `invitee@example.com`.
+    const invitedEmail = "invitee@example.com"
+    await seed("players/pl-claim", {
+      id: "pl-claim",
+      ownerId: OWNER,
+      name: "Ana",
+      nameLower: "ana",
+      linkedUid: null,
+      invitedEmail,
+      invitedAt: 0,
+      createdAt: 0,
+      updatedAt: 0,
+    })
+    // Attacker logs in with the matching email but not verified.
+    await assertFails(
+      updateDoc(
+        doc(
+          authedAs("attacker-uid", invitedEmail, { verified: false }),
+          "players/pl-claim",
+        ),
+        { linkedUid: "attacker-uid", invitedAt: null },
+      ),
+    )
+  })
+
+  it("verified email CAN consume the admin invite (positive control)", async () => {
+    // Same as the negative cases but with email_verified=true — should
+    // succeed. Locks in the happy path so we know the rule isn't simply
+    // broken for everyone.
+    const email = "invited@example.com"
+    await seed(`adminInvites/${email}`, { email, createdAt: 0 })
+    await assertSucceeds(
+      setDoc(doc(authedAs(OWNER, email), `users/${OWNER}`), {
+        uid: OWNER,
+        email,
+        displayName: "Real Invitee",
+        preferredSide: "any",
+        role: "admin",
+        createdAt: 0,
+        updatedAt: 0,
+      }),
+    )
+  })
+})
+
+describe("security: /mail queue lockdown", () => {
+  // Common mail body — the Trigger Email extension cares about `to` and
+  // `message`, the rule cares about `_meta`.
+  const mailBody = {
+    to: "someone@example.com",
+    message: { subject: "hi", html: "<p>hi</p>" },
+  }
+
+  it("rejects mail without _meta (the legacy spam path)", async () => {
+    await assertFails(setDoc(doc(owner(), "mail/m1"), mailBody))
+  })
+
+  it("rejects mail whose _meta.ownerId doesn't match auth.uid (impersonation)", async () => {
+    await assertFails(
+      setDoc(doc(owner(), "mail/m1"), {
+        ...mailBody,
+        _meta: { ownerId: OTHER, kind: "player-invite" },
+      }),
+    )
+  })
+
+  it("rejects mail with an unknown _meta.kind", async () => {
+    await assertFails(
+      setDoc(doc(owner(), "mail/m1"), {
+        ...mailBody,
+        _meta: { ownerId: OWNER, kind: "newsletter" },
+      }),
+    )
+  })
+
+  it("allows player-invite mail from any authenticated user with valid _meta", async () => {
+    await assertSucceeds(
+      setDoc(doc(owner(), "mail/m1"), {
+        ...mailBody,
+        _meta: { ownerId: OWNER, kind: "player-invite" },
+      }),
+    )
+  })
+
+  it("rejects admin-invite mail from a non-superadmin user", async () => {
+    // Regular auth user (not even admin claim) trying to mint an admin invite.
+    await assertFails(
+      setDoc(doc(owner(), "mail/m1"), {
+        ...mailBody,
+        _meta: { ownerId: OWNER, kind: "admin-invite" },
+      }),
+    )
+  })
+
+  it("rejects admin-invite mail from a plain admin (not superadmin)", async () => {
+    // `admin: true` claim doesn't qualify — only `superadmin: true` does.
+    await assertFails(
+      setDoc(doc(admin(), "mail/m1"), {
+        ...mailBody,
+        _meta: { ownerId: ADMIN, kind: "admin-invite" },
+      }),
+    )
+  })
+
+  it("allows admin-invite mail from a superadmin", async () => {
+    await assertSucceeds(
+      setDoc(doc(superAdmin(), "mail/m1"), {
+        ...mailBody,
+        _meta: { ownerId: ADMIN, kind: "admin-invite" },
+      }),
+    )
+  })
+
+  it("denies reading any mail doc (extension uses admin SDK)", async () => {
+    await seed("mail/m1", {
+      ...mailBody,
+      _meta: { ownerId: OWNER, kind: "player-invite" },
+    })
+    await assertFails(getDoc(doc(owner(), "mail/m1")))
+    await assertFails(getDoc(doc(superAdmin(), "mail/m1")))
+  })
+})
+
+describe("security: size caps on user-writable strings/lists", () => {
+  const longString = "x".repeat(100)
+
+  it("rejects /pozos create with name longer than 80 chars", async () => {
+    await assertFails(
+      setDoc(doc(owner(), "pozos/p1"), {
+        id: "p1",
+        ownerId: OWNER,
+        name: longString,
+        createdAt: 0,
+        status: "draft",
+        config: {},
+        players: [],
+        matches: [],
+      }),
+    )
+  })
+
+  it("rejects /pozos create with players list larger than 64 entries", async () => {
+    const players = Array.from({ length: 65 }, (_, i) => ({
+      id: `p${i}`,
+      name: `Player ${i}`,
+    }))
+    await assertFails(
+      setDoc(doc(owner(), "pozos/p1"), {
+        id: "p1",
+        ownerId: OWNER,
+        name: "Pozo",
+        createdAt: 0,
+        status: "draft",
+        config: {},
+        players,
+        matches: [],
+      }),
+    )
+  })
+
+  it("rejects /players create with name longer than 80 chars", async () => {
+    await assertFails(
+      setDoc(doc(owner(), "players/pl1"), {
+        id: "pl1",
+        ownerId: OWNER,
+        name: longString,
+        nameLower: longString.toLowerCase(),
+        linkedUid: null,
+        invitedEmail: null,
+        invitedAt: null,
+        createdAt: 0,
+        updatedAt: 0,
+      }),
+    )
+  })
+
+  it("rejects /groups create with name longer than 80 chars", async () => {
+    await assertFails(
+      setDoc(doc(owner(), "groups/g1"), {
+        id: "g1",
+        ownerId: OWNER,
+        name: longString,
+        nameLower: longString.toLowerCase(),
+        createdAt: 0,
+        updatedAt: 0,
+      }),
+    )
+  })
+
+  it("rejects /pozos create where players is not a list (type confusion)", async () => {
+    await assertFails(
+      setDoc(doc(owner(), "pozos/p1"), {
+        id: "p1",
+        ownerId: OWNER,
+        name: "Pozo",
+        createdAt: 0,
+        status: "draft",
+        config: {},
+        players: "not-a-list" as unknown as never,
+        matches: [],
+      }),
+    )
+  })
+})
+
+describe("security: /players claim path is locked to specific keys", () => {
+  const invitedEmail = "claimer@example.com"
+  const CLAIMER_UID = "uid-claimer"
+  const seededPlayer = {
+    id: "pl-claim",
+    ownerId: OWNER,
+    name: "Ana",
+    nameLower: "ana",
+    linkedUid: null,
+    invitedEmail,
+    invitedAt: 0,
+    createdAt: 0,
+    updatedAt: 0,
+  }
+
+  beforeEach(() => seed("players/pl-claim", seededPlayer))
+
+  it("allows the legitimate claim (linkedUid + invitedAt + updatedAt only)", async () => {
+    await assertSucceeds(
+      updateDoc(
+        doc(authedAs(CLAIMER_UID, invitedEmail), "players/pl-claim"),
+        {
+          linkedUid: CLAIMER_UID,
+          invitedAt: null,
+          updatedAt: 1,
+        },
+      ),
+    )
+  })
+
+  it("rejects a claim that also rewrites `name` (corruption attempt)", async () => {
+    await assertFails(
+      updateDoc(
+        doc(authedAs(CLAIMER_UID, invitedEmail), "players/pl-claim"),
+        {
+          linkedUid: CLAIMER_UID,
+          invitedAt: null,
+          name: "Pwned",
+        },
+      ),
+    )
+  })
+
+  it("rejects a claim that adds an arbitrary new field", async () => {
+    await assertFails(
+      updateDoc(
+        doc(authedAs(CLAIMER_UID, invitedEmail), "players/pl-claim"),
+        {
+          linkedUid: CLAIMER_UID,
+          invitedAt: null,
+          isAdmin: true,
+        },
+      ),
+    )
+  })
+
+  it("rejects a claim that tries to keep invitedAt populated", async () => {
+    // The claim path requires invitedAt to be set to null (claimed = no
+    // longer "waiting on invitee").
+    await assertFails(
+      updateDoc(
+        doc(authedAs(CLAIMER_UID, invitedEmail), "players/pl-claim"),
+        {
+          linkedUid: CLAIMER_UID,
+          invitedAt: Date.now(), // attacker tries to keep "invited" state
+        },
+      ),
+    )
+  })
+
+  it("rejects a claim on a record already linked to someone else", async () => {
+    // Re-seed with linkedUid already set — the claim path requires
+    // resource.data.linkedUid == null.
+    await seed("players/pl-claim", { ...seededPlayer, linkedUid: "someone-else" })
+    await assertFails(
+      updateDoc(
+        doc(authedAs(CLAIMER_UID, invitedEmail), "players/pl-claim"),
+        {
+          linkedUid: CLAIMER_UID,
+          invitedAt: null,
+        },
+      ),
+    )
+  })
+
+  it("rejects a claim where the auth user's email doesn't match invitedEmail", async () => {
+    // Random authed user (correct verified=true via default) but with the
+    // WRONG email — shouldn't be able to claim someone else's invite.
+    await assertFails(
+      updateDoc(
+        doc(authedAs(CLAIMER_UID, "wrong@example.com"), "players/pl-claim"),
+        {
+          linkedUid: CLAIMER_UID,
+          invitedAt: null,
+        },
+      ),
+    )
   })
 })
 

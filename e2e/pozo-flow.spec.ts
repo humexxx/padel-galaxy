@@ -22,13 +22,23 @@ async function signIn(page: Page) {
 }
 
 async function fillSlotByCreating(page: Page, slotIndex: number, name: string) {
-  // Each combobox trigger has aria-label="Jugador N".
-  await page.getByRole("button", { name: `Jugador ${slotIndex + 1}` }).click()
-  // The popover renders a CommandInput placeholder.
-  const input = page.getByPlaceholder(/buscar o crear/i)
+  // Each combobox trigger has aria-label="Jugador N". Use locator() with the
+  // CSS attribute selector instead of getByRole — Playwright's role-based
+  // matcher crashes on the base-ui `<PopoverTrigger>` rendering chain with
+  // "element.matches is not a function". The aria-label attribute is set
+  // by PlayerCombobox so it's a stable hook either way.
+  await page.locator(`button[aria-label="Jugador ${slotIndex + 1}"]`).click()
+  // The popover renders a CommandInput placeholder. Scope to the visible
+  // popover via .last() — base-ui keeps the previous popover's DOM around
+  // briefly during the exit animation, so without the scope we'd race on
+  // two CommandInputs (one fading out, one fresh).
+  const input = page.getByPlaceholder(/buscar o crear/i).last()
   await input.waitFor({ state: "visible" })
   await input.fill(name)
   await page.getByRole("option", { name: new RegExp(`^Crear "${name}"`) }).click()
+  // Wait for THIS popover to fully close before the loop iterates, so the
+  // next slot doesn't race against the lingering DOM of this one.
+  await input.waitFor({ state: "hidden" })
 }
 
 test.describe("Pozo creation flow", () => {
@@ -82,8 +92,11 @@ test.describe("Pozo creation flow", () => {
     await page.waitForURL("**/pozos/nuevo")
 
     // Open the first slot and search for "Ana" — should appear as an
-    // existing roster suggestion (not a "Crear" affordance).
-    await page.getByRole("button", { name: "Jugador 1" }).click()
+    // existing roster suggestion (not a "Crear" affordance). Use a CSS
+    // attribute selector instead of getByRole — same workaround as
+    // `fillSlotByCreating` above (base-ui PopoverTrigger crashes
+    // Playwright's role-matcher).
+    await page.locator('button[aria-label="Jugador 1"]').click()
     const input = page.getByPlaceholder(/buscar o crear/i)
     await input.waitFor({ state: "visible" })
     await input.fill("Ana")

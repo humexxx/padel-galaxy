@@ -80,7 +80,6 @@ export const E2E_USERS: Record<SeededUser["key"], SeededUser> = {
 export const E2E_USER = E2E_USERS.organizer
 
 const IDENTITY_BASE = `http://${AUTH_EMULATOR_HOST}/identitytoolkit.googleapis.com/v1`
-const EMULATOR_AUTH_BASE = `http://${AUTH_EMULATOR_HOST}/emulator/v1/projects/${PROJECT_ID}`
 const FIRESTORE_BASE = `http://${FIRESTORE_EMULATOR_HOST}/v1/projects/${PROJECT_ID}/databases/(default)/documents`
 
 /**
@@ -137,27 +136,49 @@ async function ensureUser(user: SeededUser): Promise<string> {
 }
 
 /**
- * Set custom auth claims via the emulator-only endpoint
- * (`/emulator/v1/projects/{id}/accounts/{uid}`). The Identity Toolkit REST
- * API has no public way to do this — it's an emulator escape hatch
- * specifically designed for tests.
+ * Finalize the auth account after signUp: stamp email_verified=true so the
+ * user passes the firestore.rules `hasVerifiedEmail()` gate, and apply any
+ * custom claims (admin/superadmin).
  *
- * No-op if `claims` is empty (avoids a needless round trip for vanilla users).
+ * Uses the same `accounts:update` endpoint the Admin SDK uses, with the
+ * emulator's `Bearer owner` escape hatch so the request is treated as admin
+ * (otherwise privileged fields like `emailVerified` and `customAttributes`
+ * would be rejected).
+ *
+ * IMPORTANT: marking email_verified=true is REQUIRED for any rule that
+ * depends on `hasVerifiedEmail()` — admin invite consumption, /adminInvites
+ * self-read/delete, /players claim path, and the doc-lookup branch of
+ * isAdmin(). Without this, signed-in test users would be treated as
+ * "unverified email" and many flows would fail under the hardened rules.
  */
-async function setClaims(uid: string, claims: Record<string, unknown>): Promise<void> {
-  if (Object.keys(claims).length === 0) return
-  const res = await fetch(`${EMULATOR_AUTH_BASE}/accounts/${uid}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      // customAttributes must be a JSON-encoded STRING, mirroring the
-      // Admin SDK's setCustomUserClaims wire format.
-      customAttributes: JSON.stringify(claims),
-    }),
+async function finalizeAuthAccount(
+  uid: string,
+  claims: Record<string, unknown>,
+): Promise<void> {
+  const body: Record<string, unknown> = {
+    localId: uid,
+    emailVerified: true,
+  }
+  if (Object.keys(claims).length > 0) {
+    // customAttributes must be a JSON-encoded STRING, mirroring the
+    // Admin SDK's setCustomUserClaims wire format.
+    body.customAttributes = JSON.stringify(claims)
+  }
+  const res = await fetch(`${IDENTITY_BASE}/accounts:update?key=fake-api-key`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-Project-Id": PROJECT_ID,
+      // The Auth emulator treats this header as an admin/root context, so
+      // privileged fields are accepted. Without it the request comes in as
+      // an end-user and those fields are stripped.
+      Authorization: "Bearer owner",
+    },
+    body: JSON.stringify(body),
   })
   if (!res.ok) {
     const text = await res.text().catch(() => "")
-    throw new Error(`setClaims(${uid}) failed: ${res.status} ${text}`)
+    throw new Error(`finalizeAuthAccount(${uid}) failed: ${res.status} ${text}`)
   }
 }
 
@@ -206,7 +227,7 @@ async function seedDoc(path: string, data: Record<string, unknown>): Promise<voi
 async function seedOne(user: SeededUser): Promise<void> {
   const uid = await ensureUser(user)
   user.uid = uid
-  await setClaims(uid, user.claims)
+  await finalizeAuthAccount(uid, user.claims)
   // Pre-seed the /users/{uid} profile doc with the desired role. When the
   // user signs in, `ensureUserProfile` finds an existing doc with `role`
   // and goes into the "refresh mirrored fields" branch — it WON'T downgrade

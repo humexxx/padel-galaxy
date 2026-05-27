@@ -30,8 +30,12 @@ test.describe("Admin (superadmin) flow", () => {
 
     // The page renders the canonical superadmin headline + the email of the
     // current user (so a user impersonating an admin would be obvious).
+    // The email appears in TWO places — the headline subtitle and the user
+    // menu — so we anchor to the headline text specifically.
     await expect(page.getByRole("heading", { name: /^Admin$/, level: 1 })).toBeVisible()
-    await expect(page.getByText(ADMIN.email)).toBeVisible()
+    await expect(
+      page.getByText(/Ingresaste como superadmin/i),
+    ).toBeVisible()
   })
 
   test("admin can edit their preferences in Settings and the save button shows up only when dirty", async ({
@@ -74,10 +78,10 @@ test.describe("Admin (superadmin) flow", () => {
 
     await page.getByRole("button", { name: /^Privacidad$/i }).click()
 
-    // The destructive panel shows up with a trigger button.
-    await expect(
-      page.getByRole("heading", { name: /Zona de peligro/i }),
-    ).toBeVisible()
+    // The destructive panel shows up with a trigger button. CardTitle
+    // renders as a div (not a heading element), so we assert via getByText
+    // — same fix we applied to the unit test.
+    await expect(page.getByText(/Zona de peligro/i)).toBeVisible()
     // There are two destructive buttons (trigger + dialog button), use the
     // trigger button specifically.
     await page.getByRole("button", { name: /^Eliminar cuenta$/i }).click()

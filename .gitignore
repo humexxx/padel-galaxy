@@ -9,6 +9,10 @@
 /coverage
 *.tsbuildinfo
 
+# playwright artifacts (HTML report + per-test screenshots/videos)
+/playwright-report
+/test-results
+
 # vite
 .vite
 

@@ -17,3 +17,27 @@
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase()
 }
+
+/**
+ * Loose email format check — not a full RFC 5322 implementation (those are
+ * famously gnarly), just a sanity guard against obviously-invalid inputs
+ * that would otherwise slip through to the mail extension. We require at
+ * least one char before `@`, at least one before the dot, and a TLD char.
+ */
+export function looksLikeEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())
+}
+
+/**
+ * HTML-escape user-controlled strings before interpolating into email HTML
+ * bodies. Centralized here so admin-invites and player-invites use the same
+ * escape rules — `&` first to avoid double-escaping the entities below.
+ */
+export function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+}

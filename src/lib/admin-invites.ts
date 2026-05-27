@@ -11,7 +11,7 @@ import {
   type Unsubscribe,
 } from "firebase/firestore"
 
-import { normalizeEmail } from "@/lib/email"
+import { escapeHtml, normalizeEmail } from "@/lib/email"
 import { db } from "@/lib/firebase"
 
 const COLLECTION = "adminInvites"
@@ -70,6 +70,14 @@ export async function createInvite(args: {
   // sends; if it's misconfigured this throws but we don't unroll the
   // invite — the superadmin can re-invite later.
   const appUrl = args.appUrl ?? window.location.origin
+  // Escape every user-controlled value before splicing into HTML — emailDisplay
+  // is typed by a superadmin and could contain markup either accidentally
+  // (e.g. an autocomplete fragment) or maliciously. `appUrl` is always
+  // window.location.origin (browser-controlled) so it's safe-by-construction
+  // but escaping it costs nothing and protects against future call sites
+  // that might pass user-controlled URLs.
+  const safeEmail = escapeHtml(emailDisplay)
+  const safeUrl = escapeHtml(appUrl)
   try {
     await setDoc(doc(collection(db, "mail")), {
       to: [emailDisplay],
@@ -85,10 +93,19 @@ export async function createInvite(args: {
         html:
           `<p>Hola,</p>` +
           `<p>Te invitaron a <strong>Padel Galaxy</strong> con permisos de administrador.</p>` +
-          `<p>Entrá a <a href="${appUrl}">${appUrl}</a> y registrate / ingresá con este mismo email ` +
-          `(<code>${emailDisplay}</code>). Cuando inicies sesión vas a tener acceso ` +
+          `<p>Entrá a <a href="${safeUrl}">${safeUrl}</a> y registrate / ingresá con este mismo email ` +
+          `(<code>${safeEmail}</code>). Cuando inicies sesión vas a tener acceso ` +
           `automáticamente al panel de admin.</p>` +
           `<p style="color:#666;font-size:12px">Si no esperabas esta invitación, ignorá este mensaje.</p>`,
+      },
+      // Required by the /mail rule — proves this enqueue came from a
+      // signed-in user (auditable) and is one of the two known flows.
+      // `admin-invite` is additionally gated on isSuperAdminClaim() in
+      // the rule, so a regular user can't fake one even with these fields.
+      _meta: {
+        kind: "admin-invite",
+        ownerId: args.invitedBy,
+        createdAt: serverTimestamp(),
       },
     })
   } catch (err) {

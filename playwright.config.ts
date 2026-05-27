@@ -41,7 +41,11 @@ export default defineConfig({
   webServer: process.env.E2E_NO_WEB_SERVER
     ? undefined
     : {
-        command: "npm run dev -- --port=5173",
+        // `--host=127.0.0.1` is REQUIRED: by default Vite only binds to
+        // `localhost`, which on macOS resolves to ::1 (IPv6) only. Playwright
+        // and the BASE_URL above hit 127.0.0.1 explicitly. Without this flag
+        // every page.goto() fails with ECONNREFUSED.
+        command: "npm run dev -- --port=5173 --host=127.0.0.1",
         port: PORT,
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,

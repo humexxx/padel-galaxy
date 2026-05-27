@@ -7,8 +7,8 @@ import {
   where,
 } from "firebase/firestore"
 
-import { normalizeEmail } from "@/lib/email"
-import { db } from "@/lib/firebase"
+import { escapeHtml, looksLikeEmail, normalizeEmail } from "@/lib/email"
+import { auth, db } from "@/lib/firebase"
 import { updatePlayer, type PlayerRecord } from "@/lib/players"
 
 /**
@@ -27,9 +27,21 @@ export async function sendPlayerInvite(input: {
   appUrl: string
 }): Promise<void> {
   const { player, email, ownerName, appUrl } = input
-  const cleanEmail = email.trim().toLowerCase()
-  if (!cleanEmail || !cleanEmail.includes("@")) {
+  const cleanEmail = normalizeEmail(email)
+  if (!looksLikeEmail(cleanEmail)) {
+    // Reject obvious garbage so we don't poison the /mail queue with
+    // unsendable docs (the extension would retry, log, then eventually drop
+    // — better to surface the error here).
     throw new Error("Email inválido")
+  }
+  // The /mail rule requires `_meta.ownerId == request.auth.uid`. We use the
+  // CURRENT auth user — not `player.ownerId` — because the rule's job is to
+  // make every mail attributable to the signed-in user who triggered it.
+  // Without this, a malicious caller could pass a fake `player.ownerId` and
+  // impersonate someone else as the mail sender.
+  const senderUid = auth.currentUser?.uid
+  if (!senderUid) {
+    throw new Error("Iniciá sesión para enviar invitaciones")
   }
 
   const subject = `${ownerName} te invitó a Padel Galaxy`
@@ -61,11 +73,12 @@ export async function sendPlayerInvite(input: {
   await addDoc(collection(db, "mail"), {
     to: cleanEmail,
     message: { subject, html },
-    // Metadata so we can audit / debug later. The extension ignores extras.
+    // Metadata required by the /mail rule (ownerId == auth.uid + known kind)
+    // so we can audit / debug later. The extension ignores extras.
     _meta: {
       kind: "player-invite",
+      ownerId: senderUid,
       playerId: player.id,
-      ownerId: player.ownerId,
       createdAt: serverTimestamp(),
     },
   })
@@ -74,15 +87,6 @@ export async function sendPlayerInvite(input: {
     invitedEmail: cleanEmail,
     invitedAt: Date.now(),
   })
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;")
 }
 
 /**

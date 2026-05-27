@@ -2,7 +2,7 @@ import * as React from "react"
 import { createBrowserRouter } from "react-router"
 import { Loader2Icon } from "lucide-react"
 
-import { RequireAuth, RequireSuperAdmin, RedirectIfAuthed } from "@/components/route-guards"
+import { RequireAdmin, RequireAuth, RequireSuperAdmin, RedirectIfAuthed } from "@/components/route-guards"
 
 // AppLayout is tiny (just SiteHeader + PageTransition) and is on the critical
 // path for every authenticated route — keep it eager so the chrome paints
@@ -85,7 +85,6 @@ export const router = createBrowserRouter([
         element: <AppLayout />,
         children: [
           { path: "/pozos", element: lazyEl(PozosPage) },
-          { path: "/pozos/nuevo", element: lazyEl(NuevoPozoPage) },
           { path: "/pozos/:id", element: lazyEl(PozoDetailPage) },
           { path: "/jugadores", element: lazyEl(JugadoresPage) },
           { path: "/jugadores/:id", element: lazyEl(JugadorDetallePage) },
@@ -94,6 +93,17 @@ export const router = createBrowserRouter([
           { path: "/grupos/:id", element: lazyEl(GrupoDetallePage) },
           { path: "/historial", element: lazyEl(HistorialPage) },
           { path: "/settings", element: lazyEl(SettingsPage) },
+        ],
+      },
+      {
+        element: <RequireAdmin />,
+        children: [
+          {
+            element: <AppLayout />,
+            children: [
+              { path: "/pozos/nuevo", element: lazyEl(NuevoPozoPage) },
+            ],
+          },
         ],
       },
       {

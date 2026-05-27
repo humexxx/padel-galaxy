@@ -47,6 +47,7 @@ type Tab = "pozos" | "grupos"
 
 export function PozosPage() {
   const { pozos, hydrated, remove } = usePozos()
+  const { isAdmin } = useAuth()
   const active = pozos.filter((p) => p.status !== "finished")
   const [tab, setTab] = React.useState<Tab>("pozos")
 
@@ -71,11 +72,13 @@ export function PozosPage() {
 
         <TabsContent value="pozos" className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <CreatePozoCard />
+            {isAdmin && <CreatePozoCard />}
             {hydrated &&
               active.map((p) => <PozoCard key={p.id} pozo={p} onDelete={remove} />)}
           </div>
-          {hydrated && active.length === 0 && <EmptyPozosHint />}
+          {hydrated && active.length === 0 && (
+            <EmptyPozosHint canCreate={isAdmin} />
+          )}
         </TabsContent>
 
         <TabsContent value="grupos" className="space-y-4">
@@ -109,7 +112,7 @@ function CreatePozoCard() {
   )
 }
 
-function EmptyPozosHint() {
+function EmptyPozosHint({ canCreate }: { canCreate: boolean }) {
   return (
     <div className="mt-4 flex flex-col items-center gap-2 rounded-xl border border-dashed bg-card px-6 py-10 text-center">
       <div className="rounded-full bg-primary/10 p-3 text-primary">
@@ -117,11 +120,31 @@ function EmptyPozosHint() {
       </div>
       <Text className="text-base font-semibold">No tenés pozos activos</Text>
       <Text variant="muted" className="max-w-md text-sm">
-        Usá la card de arriba para crear el primero. Cuando termines uno, va a aparecer en{" "}
-        <Link to="/historial" className="font-medium text-foreground underline-offset-4 hover:underline">
-          Historial
-        </Link>
-        .
+        {canCreate ? (
+          <>
+            Usá la card de arriba para crear el primero. Cuando termines uno, va
+            a aparecer en{" "}
+            <Link
+              to="/historial"
+              className="font-medium text-foreground underline-offset-4 hover:underline"
+            >
+              Historial
+            </Link>
+            .
+          </>
+        ) : (
+          <>
+            Cuando un admin cree un pozo en el que estés, lo vas a ver acá. Los
+            pozos terminados quedan en{" "}
+            <Link
+              to="/historial"
+              className="font-medium text-foreground underline-offset-4 hover:underline"
+            >
+              Historial
+            </Link>
+            .
+          </>
+        )}
       </Text>
     </div>
   )

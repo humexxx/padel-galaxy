@@ -443,6 +443,7 @@ function FinishedView({
   onChangeGroup: (groupId: string | undefined) => void
 }) {
   const navigate = useNavigate()
+  const { isAdmin } = useAuth()
   // Memoized — `sortStandings` re-runs when sort changes and would otherwise
   // recompute `standings` from scratch every render (FinishedView re-renders
   // on the `setSort` flip and on every confetti effect tick).
@@ -568,10 +569,12 @@ function FinishedView({
       </Tabs>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-        <Button variant="outline" onClick={() => navigate("/pozos/nuevo")}>
-          <RotateCcwIcon className="size-4" />
-          Crear otro pozo
-        </Button>
+        {isAdmin && (
+          <Button variant="outline" onClick={() => navigate("/pozos/nuevo")}>
+            <RotateCcwIcon className="size-4" />
+            Crear otro pozo
+          </Button>
+        )}
         <Button onClick={onBack}>Volver a pozos</Button>
       </div>
     </PageContainer>

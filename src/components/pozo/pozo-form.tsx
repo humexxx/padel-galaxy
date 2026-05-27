@@ -488,7 +488,7 @@ export function PozoForm() {
                 </>
               ) : (
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Cargá jugadores abajo para ver cuánto dura cada partido.
+                  Cargá jugadores arriba para ver cuánto dura cada partido.
                 </p>
               )}
             </div>
@@ -551,10 +551,10 @@ export function PozoForm() {
       )}
 
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
-        <Button type="button" variant="outline" size="lg" onClick={() => navigate(-1)}>
+        <Button type="button" variant="outline" onClick={() => navigate(-1)}>
           Cancelar
         </Button>
-        <Button type="submit" disabled={errors.length > 0 || submitting} size="lg">
+        <Button type="submit" disabled={errors.length > 0 || submitting}>
           {submitting ? "Creando…" : "Crear pozo"}
         </Button>
       </div>

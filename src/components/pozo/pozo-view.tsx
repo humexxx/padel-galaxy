@@ -419,10 +419,10 @@ function PozoDraftView({
             <Stat label="Partidos" value={pozo.totalRounds * pozo.config.courts} />
           </div>
           <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:justify-center">
-            <Button variant="outline" size="lg" onClick={onBack}>
+            <Button variant="outline" onClick={onBack}>
               Volver
             </Button>
-            <Button size="lg" onClick={onStart}>
+            <Button onClick={onStart}>
               <PlayIcon className="size-5" />
               Comenzar pozo
             </Button>

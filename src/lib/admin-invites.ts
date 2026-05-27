@@ -70,6 +70,9 @@ export async function createInvite(args: {
   // sends; if it's misconfigured this throws but we don't unroll the
   // invite — the superadmin can re-invite later.
   const appUrl = args.appUrl ?? window.location.origin
+  // Deep-link straight to /login so the invitee doesn't bounce through the
+  // marketing landing first. Mirrors the player-invite email layout.
+  const loginUrl = `${appUrl}/login`
   // Escape every user-controlled value before splicing into HTML — emailDisplay
   // is typed by a superadmin and could contain markup either accidentally
   // (e.g. an autocomplete fragment) or maliciously. `appUrl` is always
@@ -77,7 +80,7 @@ export async function createInvite(args: {
   // but escaping it costs nothing and protects against future call sites
   // that might pass user-controlled URLs.
   const safeEmail = escapeHtml(emailDisplay)
-  const safeUrl = escapeHtml(appUrl)
+  const safeLoginUrl = escapeHtml(loginUrl)
   try {
     await setDoc(doc(collection(db, "mail")), {
       to: [emailDisplay],
@@ -86,16 +89,21 @@ export async function createInvite(args: {
         text:
           `Hola,\n\n` +
           `Te invitaron a Padel Galaxy con permisos de administrador.\n\n` +
-          `Entrá a ${appUrl} y registrate / ingresá con este mismo email ` +
+          `Entrá a ${loginUrl} y registrate / ingresá con este mismo email ` +
           `(${emailDisplay}). Cuando inicies sesión vas a tener acceso ` +
           `automáticamente al panel de admin.\n\n` +
           `Si no esperabas esta invitación, ignorá este mensaje.\n`,
         html:
           `<p>Hola,</p>` +
           `<p>Te invitaron a <strong>Padel Galaxy</strong> con permisos de administrador.</p>` +
-          `<p>Entrá a <a href="${safeUrl}">${safeUrl}</a> y registrate / ingresá con este mismo email ` +
-          `(<code>${safeEmail}</code>). Cuando inicies sesión vas a tener acceso ` +
-          `automáticamente al panel de admin.</p>` +
+          `<p>` +
+            `<a href="${safeLoginUrl}" ` +
+            `style="display:inline-block;background:#5567c5;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:600">` +
+            `Acceder a Padel Galaxy` +
+            `</a>` +
+          `</p>` +
+          `<p>Usá este mismo email (<code>${safeEmail}</code>) para registrarte o ingresar. ` +
+          `Cuando inicies sesión vas a tener acceso automáticamente al panel de admin.</p>` +
           `<p style="color:#666;font-size:12px">Si no esperabas esta invitación, ignorá este mensaje.</p>`,
       },
       // Required by the /mail rule — proves this enqueue came from a

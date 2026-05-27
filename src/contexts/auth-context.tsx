@@ -77,6 +77,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           uid: next.uid,
           email: next.email ?? "",
           displayName: next.displayName ?? "",
+          // Passed through so deriveInitialRole can avoid trying to create
+          // a doc with role='admin' for an unverified email — the firestore
+          // rule would reject it and we'd land in a no-doc-no-role state.
+          emailVerified: next.emailVerified,
           claims,
         }).catch((err) => console.error("ensureUserProfile failed:", err))
       } else {

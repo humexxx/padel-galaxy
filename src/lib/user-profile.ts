@@ -3,6 +3,7 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  getDocs,
   onSnapshot,
   query,
   serverTimestamp,
@@ -153,9 +154,10 @@ export async function ensureUserProfile(args: {
   uid: string
   email: string
   displayName: string
+  emailVerified: boolean
   claims: { admin?: boolean; superadmin?: boolean }
 }): Promise<UserRole> {
-  const { uid, displayName, claims } = args
+  const { uid, displayName, emailVerified, claims } = args
   const email = normalizeEmail(args.email)
   const ref = userDoc(uid)
   const snap = await getDoc(ref)
@@ -177,10 +179,14 @@ export async function ensureUserProfile(args: {
       // user doc already exists. Covers the case where the organizer added
       // the player invite AFTER the user already had an account.
       await linkInvitedPlayerIfAny(email, uid)
+      // NOTE: we don't auto-promote a player-role user even if an admin
+      // invite is pending for their email — the /users update rule rejects
+      // a self-update that changes role. The superadmin promotes them
+      // directly from /admin (InviteAdminCard detects the existing user).
       return data.role
     }
     // Old-schema doc → backfill role.
-    const derived = await deriveInitialRole(email, claims)
+    const derived = await deriveInitialRole(email, emailVerified, claims)
     await updateDoc(ref, {
       role: derived,
       email,
@@ -194,7 +200,7 @@ export async function ensureUserProfile(args: {
   }
 
   // No doc yet → create it.
-  const role = await deriveInitialRole(email, claims)
+  const role = await deriveInitialRole(email, emailVerified, claims)
   const profile: UserProfile = {
     uid,
     email,
@@ -214,13 +220,22 @@ export async function ensureUserProfile(args: {
  * Precedence: explicit claims beat invites beat default. We check claims
  * first because they're already-trusted ("admin/superadmin" set by a
  * script means we WANT this user elevated even without an invite).
+ *
+ * IMPORTANT: returning 'admin' from this function will be rejected by the
+ * firestore rule unless `email_verified` is true OR the caller has a
+ * privileged claim already. So when there's a pending invite but the
+ * user's email isn't verified yet, we fall back to 'player' — the invite
+ * stays for the superadmin to consume manually via /admin once the user
+ * has verified their email + signed in at least once.
  */
 async function deriveInitialRole(
   email: string,
+  emailVerified: boolean,
   claims: { admin?: boolean; superadmin?: boolean },
 ): Promise<UserRole> {
   if (claims.superadmin) return "superadmin"
   if (claims.admin) return "admin"
+  if (!emailVerified) return "player"
   const invite = await findInvite(email)
   return invite ? "admin" : "player"
 }
@@ -277,6 +292,24 @@ export function subscribeAdmins(
     (snap) => onData(snap.docs.map((d) => d.data() as UserProfile)),
     onError,
   )
+}
+
+/**
+ * One-shot lookup by email. Used by the admin panel to detect whether an
+ * email already has a registered account before falling back to the email
+ * invite flow. Returns null when no user matches.
+ *
+ * The rule `/users` allows isAdmin() to read any doc — the where-query
+ * works as long as the caller is admin tier. Don't call this from anywhere
+ * else without re-checking permissions.
+ */
+export async function findUserByEmail(email: string): Promise<UserProfile | null> {
+  const e = normalizeEmail(email)
+  if (!e) return null
+  const q = query(collection(db, COLLECTION), where("email", "==", e))
+  const snap = await getDocs(q)
+  if (snap.empty) return null
+  return snap.docs[0].data() as UserProfile
 }
 
 /**

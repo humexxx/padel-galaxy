@@ -53,8 +53,14 @@ export const E2E_USERS: Record<SeededUser["key"], SeededUser> = {
     email: "e2e@padel.test",
     password: "padel-e2e-123",
     displayName: "E2E Tester",
-    role: "player",
-    claims: {},
+    // The "organizer" tier creates pozos, players, and groups. After
+    // `/pozos/nuevo` got gated on RequireAdmin, the organizer needs admin
+    // role (not just player) to access the creation flow. Also stamps the
+    // `admin` claim so isAdmin() returns true via the cheap token path —
+    // without it the first render would be missing the "Crear pozo" CTA
+    // until the /users doc subscription resolved.
+    role: "admin",
+    claims: { admin: true },
   },
   admin: {
     key: "admin",

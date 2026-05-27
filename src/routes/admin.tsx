@@ -52,7 +52,12 @@ import {
   type AdminInvite,
 } from "@/lib/admin-invites"
 import { saveAppSettings } from "@/lib/settings"
-import { setUserRole, type UserProfile } from "@/lib/user-profile"
+import { looksLikeEmail } from "@/lib/email"
+import {
+  findUserByEmail,
+  setUserRole,
+  type UserProfile,
+} from "@/lib/user-profile"
 import { cn } from "@/lib/utils"
 
 export function AdminPage() {
@@ -94,14 +99,50 @@ function InviteAdminCard() {
     if (!user) return
     const clean = email.trim()
     if (!clean) return
+    if (!looksLikeEmail(clean)) {
+      toast.error("Ingresá un email válido.")
+      return
+    }
 
-    // Cheap client-side dup check — the doc id is the email, so writing
-    // an existing one would silently overwrite. We'd rather show the
-    // superadmin a clear "already invited" message.
     setSending(true)
     try {
-      const existing = await findInvite(clean)
-      if (existing) {
+      // FAST PATH: if the email already has a registered account, promote
+      // them directly instead of sending an invite email. The invite-by-mail
+      // flow only works for users who DON'T yet have an account — for
+      // already-registered users, ensureUserProfile's "existing doc" branch
+      // never re-derives role, so the invite would never auto-consume.
+      // The superadmin's setUserRole bypasses the self-update restriction
+      // (the firestore rule allows superadmin to change any user's role).
+      const existingUser = await findUserByEmail(clean)
+      if (existingUser) {
+        if (existingUser.role === "superadmin") {
+          toast.error(`${existingUser.email} ya es superadmin.`)
+          return
+        }
+        if (existingUser.role === "admin") {
+          toast.error(`${existingUser.email} ya es admin.`)
+          return
+        }
+        await setUserRole(existingUser.uid, "admin")
+        // If there's a leftover invite for the same email (e.g. they were
+        // invited BEFORE they registered), clean it up so the pending-invites
+        // table stays accurate.
+        const staleInvite = await findInvite(clean)
+        if (staleInvite) {
+          await deleteInvite(staleInvite.email)
+        }
+        toast.success(
+          `${existingUser.displayName || existingUser.email} promovido a admin.`,
+        )
+        setEmail("")
+        return
+      }
+
+      // SLOW PATH: no registered user yet → create an invite + send email.
+      // The doc id is the normalized email so a duplicate invite would
+      // silently overwrite — surface "already pending" instead.
+      const existingInvite = await findInvite(clean)
+      if (existingInvite) {
         toast.error("Ya hay una invitación pendiente para ese email.")
         return
       }
@@ -132,9 +173,9 @@ function InviteAdminCard() {
           Invitar nuevo admin
         </CardTitle>
         <CardDescription>
-          Mandamos un email a esa dirección. Cuando esa persona se registre o
-          inicie sesión con ese email, queda como admin automáticamente —
-          incluso si el registro está cerrado.
+          Si el email ya tiene cuenta lo promovemos directo. Si no, mandamos
+          un email a esa dirección y cuando esa persona se registre con ese
+          email queda como admin — incluso si el registro está cerrado.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -160,12 +201,12 @@ function InviteAdminCard() {
             {sending ? (
               <>
                 <Loader2Icon className="size-4 animate-spin" />
-                Enviando…
+                Procesando…
               </>
             ) : (
               <>
                 <SendIcon className="size-4" />
-                Invitar
+                Invitar / promover
               </>
             )}
           </Button>

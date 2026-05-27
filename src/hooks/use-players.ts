@@ -11,7 +11,7 @@ import {
 } from "@/lib/players"
 
 export function usePlayers() {
-  const { user, isSuperAdmin } = useAuth()
+  const { user, isAdmin } = useAuth()
   const [players, setPlayers] = React.useState<PlayerRecord[]>([])
   const [hydrated, setHydrated] = React.useState(false)
 
@@ -22,10 +22,12 @@ export function usePlayers() {
       return
     }
     setHydrated(false)
-    // Super-admin sees every player in the system. Regular users see
-    // only their own roster. Rules allow `isAdmin` reads on any
-    // /players doc — see `subscribeAllPlayers`.
-    const unsub = isSuperAdmin
+    // Any admin (regular or super) sees every player in the system —
+    // they need the full roster to compose pozos with people invited
+    // by other organizers. Clientes still see only their own records
+    // (owned + auto-created on signup). Rules already allow `isAdmin`
+    // reads on any /players doc, so the broader query is safe.
+    const unsub = isAdmin
       ? subscribeAllPlayers((list) => {
           setPlayers(list)
           setHydrated(true)
@@ -35,7 +37,7 @@ export function usePlayers() {
           setHydrated(true)
         })
     return unsub
-  }, [user, isSuperAdmin])
+  }, [user, isAdmin])
 
   return { players, hydrated }
 }

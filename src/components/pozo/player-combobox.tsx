@@ -11,6 +11,7 @@ import {
   CommandSeparator,
 } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { useScrollOnOpen } from "@/hooks/use-scroll-on-open"
 import { cn } from "@/lib/utils"
 import { findPlayerByName, normalizeName, type PlayerRecord } from "@/lib/players"
 
@@ -25,8 +26,14 @@ export type PlayerSelection = {
 type Props = {
   value: PlayerSelection
   onChange: (next: PlayerSelection) => void
-  /** All players belonging to the current owner. Used for suggestions. */
+  /** All players the current user is allowed to see. For admins this is
+   *  the whole platform roster; for regular users, just their own. */
   players: PlayerRecord[]
+  /** Player ids the user has invited into past pozos. When non-empty,
+   *  the dropdown surfaces them in a "Recientes" section above the rest.
+   *  Helpful for admins facing a long platform-wide roster who only
+   *  routinely pick a handful of regulars. */
+  recentIds?: ReadonlySet<string>
   /** Player ids picked in OTHER slots of the same pozo — these are hidden
    *  from suggestions so the user can't pick the same person twice. */
   excludeIds?: ReadonlySet<string>
@@ -40,6 +47,7 @@ export function PlayerCombobox({
   value,
   onChange,
   players,
+  recentIds,
   excludeIds,
   placeholder = "Buscar o crear…",
   label,
@@ -47,6 +55,10 @@ export function PlayerCombobox({
 }: Props) {
   const [open, setOpen] = React.useState(false)
   const [search, setSearch] = React.useState("")
+  // On mobile, scroll the trigger up when the popover opens so the
+  // CommandInput stays visible above the soft keyboard.
+  const triggerRef = React.useRef<HTMLButtonElement>(null)
+  useScrollOnOpen(triggerRef, open)
 
   // Suggestions: hide the players already picked in other slots, but always
   // keep the currently-selected one visible (so the user can confirm it).
@@ -86,9 +98,13 @@ export function PlayerCombobox({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
+        ref={triggerRef}
         disabled={disabled}
         className={cn(
           "flex h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-sm transition-colors",
+          // scroll-mt leaves room for the sticky site-header when the
+          // mobile keyboard-avoidance scroll fires.
+          "scroll-mt-16",
           "hover:bg-accent/40",
           "focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:border-ring",
           "disabled:cursor-not-allowed disabled:opacity-50",
@@ -140,6 +156,7 @@ export function PlayerCombobox({
               players={suggestions}
               search={search}
               selectedId={value.id}
+              recentIds={recentIds}
               onPick={pickExisting}
             />
             {showCreate && (
@@ -170,46 +187,117 @@ function FilteredList({
   players,
   search,
   selectedId,
+  recentIds,
   onPick,
 }: {
   players: PlayerRecord[]
   search: string
   selectedId: string | null
+  recentIds?: ReadonlySet<string>
   onPick: (p: PlayerRecord) => void
 }) {
+  // Filter by search (or take a slice of the full list) FIRST, then
+  // partition into recent vs. other so the 50-item cap doesn't push
+  // recents off the visible end of a long list. Each section then keeps
+  // up to half the cap, leaving room for both — falls through to a
+  // single "Jugadores" group when there are no recents at all (cliente
+  // or fresh admin who's never created a pozo).
   const filtered = React.useMemo(() => {
     const key = normalizeName(search)
-    if (!key) return players.slice(0, 50)
-    return players
-      .filter((p) => p.nameLower.includes(key))
-      .slice(0, 50)
+    return key
+      ? players.filter((p) => p.nameLower.includes(key))
+      : players
   }, [players, search])
 
-  if (filtered.length === 0) return null
+  const { recent, other } = React.useMemo(() => {
+    const r: PlayerRecord[] = []
+    const o: PlayerRecord[] = []
+    const set = recentIds
+    for (const p of filtered) {
+      if (set && set.has(p.id)) r.push(p)
+      else o.push(p)
+    }
+    // Cap each section at 50 to keep the menu height reasonable. Recents
+    // are typically <20 so this almost never bites them; "otros" gets
+    // truncated when the admin's platform roster grows large.
+    return { recent: r.slice(0, 50), other: o.slice(0, 50) }
+  }, [filtered, recentIds])
+
+  if (recent.length === 0 && other.length === 0) return null
+
+  // When there are no recents (cliente, or admin with no past pozos),
+  // collapse to one group labeled the same way the previous UI did so
+  // the empty-state still reads naturally.
+  if (recent.length === 0) {
+    return (
+      <CommandGroup heading="Jugadores">
+        {other.map((p) => (
+          <PlayerRow
+            key={p.id}
+            player={p}
+            selected={selectedId === p.id}
+            onPick={onPick}
+          />
+        ))}
+      </CommandGroup>
+    )
+  }
 
   return (
-    <CommandGroup heading="Tus jugadores">
-      {filtered.map((p) => {
-        const selected = selectedId === p.id
-        return (
-          <CommandItem
+    <>
+      <CommandGroup heading="Recientes">
+        {recent.map((p) => (
+          <PlayerRow
             key={p.id}
-            value={p.id}
-            keywords={[p.name, p.nameLower]}
-            onSelect={() => onPick(p)}
-          >
-            <CheckIcon
-              className={cn("size-4", selected ? "opacity-100" : "opacity-0")}
-            />
-            <span className="truncate">{p.name}</span>
-            {p.linkedUid && (
-              <span className="ml-auto text-[10px] uppercase tracking-wide text-muted-foreground">
-                vinculado
-              </span>
-            )}
-          </CommandItem>
-        )
-      })}
-    </CommandGroup>
+            player={p}
+            selected={selectedId === p.id}
+            onPick={onPick}
+          />
+        ))}
+      </CommandGroup>
+      {other.length > 0 && (
+        <>
+          <CommandSeparator />
+          <CommandGroup heading="Otros jugadores">
+            {other.map((p) => (
+              <PlayerRow
+                key={p.id}
+                player={p}
+                selected={selectedId === p.id}
+                onPick={onPick}
+              />
+            ))}
+          </CommandGroup>
+        </>
+      )}
+    </>
+  )
+}
+
+function PlayerRow({
+  player,
+  selected,
+  onPick,
+}: {
+  player: PlayerRecord
+  selected: boolean
+  onPick: (p: PlayerRecord) => void
+}) {
+  return (
+    <CommandItem
+      value={player.id}
+      keywords={[player.name, player.nameLower]}
+      onSelect={() => onPick(player)}
+    >
+      <CheckIcon
+        className={cn("size-4", selected ? "opacity-100" : "opacity-0")}
+      />
+      <span className="truncate">{player.name}</span>
+      {player.linkedUid && (
+        <span className="ml-auto text-[10px] uppercase tracking-wide text-muted-foreground">
+          vinculado
+        </span>
+      )}
+    </CommandItem>
   )
 }

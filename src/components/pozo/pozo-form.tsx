@@ -31,6 +31,7 @@ import { PlayerCombobox, type PlayerSelection } from "@/components/pozo/player-c
 import { useAuth } from "@/contexts/auth-context"
 import { useGroups } from "@/hooks/use-groups"
 import { usePlayers } from "@/hooks/use-players"
+import { usePozos } from "@/hooks/use-pozos"
 import { db } from "@/lib/firebase"
 import { createGroup, findGroupByName } from "@/lib/groups"
 import { createPlayer, findPlayerByName, normalizeName } from "@/lib/players"
@@ -74,6 +75,11 @@ export function PozoForm() {
   const { user, isAdmin } = useAuth()
   const { players: roster } = usePlayers()
   const { groups: groupRoster } = useGroups()
+  // Past pozos the current user organized — used to pre-sort the combobox
+  // so people they've actually played with bubble to the top. For admins
+  // the roster is the whole platform; without this hint they'd scroll
+  // through everyone every time.
+  const { pozos: myPozos } = usePozos()
   const [name, setName] = React.useState(() => {
     const d = new Date()
     return `Pozo ${d.toLocaleDateString("es-AR", { day: "2-digit", month: "short" })}`
@@ -106,6 +112,19 @@ export function PozoForm() {
     for (const s of slots) if (s.id) ids.add(s.id)
     return ids
   }, [slots])
+
+  // Player ids the user has invited into past pozos. The combobox uses
+  // this as a "recents" hint to render those players above the rest of
+  // the platform roster. Owner-filtered (subscribeUserPozos returns my
+  // pozos for non-superadmins; for superadmins it returns everyone's,
+  // which still works since "recent" then means "people I've seen play").
+  const recentPlayerIds = React.useMemo(() => {
+    const ids = new Set<string>()
+    for (const p of myPozos) {
+      for (const player of p.players) ids.add(player.id)
+    }
+    return ids
+  }, [myPozos])
 
   // Use the expected-when-full count (courts × 4) until the form has real
   // players filled in — otherwise the default shows 0 on the empty form.
@@ -400,6 +419,7 @@ export function PozoForm() {
                       value={slot}
                       onChange={(next) => updateSlot(i, next)}
                       players={roster}
+                      recentIds={recentPlayerIds}
                       excludeIds={exclude}
                       placeholder={`Jugador ${i + 1}`}
                       label={`Jugador ${i + 1}`}

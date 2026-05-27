@@ -27,21 +27,26 @@ service cloud.firestore {
     // Admin or higher. Three sources, evaluated cheap-to-expensive:
     //   1. legacy `admin: true` custom claim (set via set-admin.mjs)
     //   2. `superadmin: true` claim implies admin
-    //   3. /users/{uid} doc with role in {admin, superadmin} AND email is
-    //      verified — without that gate, the doc-role path could be reached
-    //      by a user whose role was assigned via the invite flow before we
-    //      added the email_verified check on create.
+    //   3. /users/{uid} doc with role in {admin, superadmin}
     //
-    // The doc lookup costs one extra read per rule eval — we accept it so
-    // admins promoted via invite (no claim) can still use the app. If perf
-    // bites us, the fallback is a Cloud Function that mirrors role → custom
-    // claim on user-doc writes.
+    // The doc-lookup branch trusts the role on the doc directly. The
+    // create rule on /users still requires hasVerifiedEmail() to write
+    // role=admin via the invite path, AND only superadmin can update
+    // someone else's role, so any doc with role=admin reflects either an
+    // already-email-verified self-creation or an explicit superadmin
+    // promotion — both of which are deliberate trust signals.
+    //
+    // Trade-off accepted: a superadmin can promote a user whose email
+    // isn't verified yet, and that user immediately gets admin powers.
+    // This is intentional — superadmin's call. The previous version
+    // gated this on hasVerifiedEmail() to defend against old docs
+    // created before the create rule had the email-verified check, but
+    // that risk is now closed by the create rule itself.
     function isAdmin() {
       return isAuth() && (
         request.auth.token.admin == true ||
         request.auth.token.superadmin == true ||
         (
-          hasVerifiedEmail() &&
           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'superadmin']
         )

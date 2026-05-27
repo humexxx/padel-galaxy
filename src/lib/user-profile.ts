@@ -366,7 +366,20 @@ async function ensureSelfPlayer(args: {
   if (args.role !== "player") return
   try {
     const existing = await findPlayerByLinkedUid(args.uid)
-    if (existing) return
+    if (existing) {
+      // Backfill `invitedEmail` if the auto-create from an older session
+      // left it null. We can tell this is a self-signup record (not an
+      // invite) because `invitedAt` is null — invite-flow records have
+      // an `invitedAt` set, and rewriting their email would clobber the
+      // organizer's original target.
+      if (
+        existing.invitedAt === null &&
+        existing.invitedEmail !== args.email
+      ) {
+        await updatePlayer(existing.id, { invitedEmail: args.email })
+      }
+      return
+    }
     // Use Firestore-generated ids for consistency with the rest of the
     // /players surface (pozo-form does the same: `doc(collection).id`).
     const id = doc(collection(db, "players")).id
@@ -379,6 +392,7 @@ async function ensureSelfPlayer(args: {
       ownerId: args.uid,
       name,
       linkedUid: args.uid,
+      invitedEmail: args.email,
     })
   } catch (err) {
     console.error("ensureSelfPlayer failed (non-fatal):", err)

@@ -151,6 +151,13 @@ type CreatePlayerInput = {
    * so the record stays unlinked until the invitee claims it.
    */
   linkedUid?: string
+  /**
+   * Email associated with this record. For invite-flow players this is
+   * set later (when the organizer sends the invite); for self-signup
+   * auto-creates we set it here so the /jugadores roster table can
+   * render the email column without an extra /users lookup per row.
+   */
+  invitedEmail?: string
 }
 
 export async function createPlayer({
@@ -158,6 +165,7 @@ export async function createPlayer({
   ownerId,
   name,
   linkedUid,
+  invitedEmail,
 }: CreatePlayerInput): Promise<PlayerRecord> {
   const trimmed = name.trim()
   const now = Date.now()
@@ -167,7 +175,7 @@ export async function createPlayer({
     name: trimmed,
     nameLower: normalizeName(trimmed),
     linkedUid: linkedUid ?? null,
-    invitedEmail: null,
+    invitedEmail: invitedEmail ?? null,
     invitedAt: null,
     createdAt: now,
     updatedAt: now,

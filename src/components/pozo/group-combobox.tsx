@@ -11,6 +11,7 @@ import {
   CommandSeparator,
 } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { useScrollOnOpen } from "@/hooks/use-scroll-on-open"
 import { cn } from "@/lib/utils"
 import { findGroupByName, type GroupRecord } from "@/lib/groups"
 import { normalizeName } from "@/lib/players"
@@ -44,6 +45,10 @@ export function GroupCombobox({
 }: Props) {
   const [open, setOpen] = React.useState(false)
   const [search, setSearch] = React.useState("")
+  // On mobile, scroll the trigger up when the popover opens so the
+  // CommandInput stays visible above the soft keyboard.
+  const triggerRef = React.useRef<HTMLButtonElement>(null)
+  useScrollOnOpen(triggerRef, open)
 
   const filtered = React.useMemo(() => {
     const q = normalizeName(search)
@@ -83,6 +88,7 @@ export function GroupCombobox({
       <PopoverTrigger
         render={
           <button
+            ref={triggerRef}
             type="button"
             aria-label={label}
             aria-haspopup="listbox"
@@ -90,6 +96,9 @@ export function GroupCombobox({
             disabled={disabled}
             className={cn(
               "flex h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-left text-sm shadow-xs transition-colors",
+              // scroll-mt leaves room for the sticky site-header during
+              // the mobile keyboard-avoidance scroll.
+              "scroll-mt-16",
               "hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50",
               invalid && "border-destructive ring-destructive/30",
             )}

@@ -439,6 +439,24 @@ export function subscribeAdmins(
 }
 
 /**
+ * Subscribe to all player-tier users ("clientes"). Used by the /admin
+ * "Clientes registrados" table so the superadmin can promote them without
+ * retyping their email. Same rule footprint as `subscribeAdmins`: only
+ * admin-tier callers can read other users' docs.
+ */
+export function subscribeClienteUsers(
+  onData: (users: UserProfile[]) => void,
+  onError?: (err: Error) => void,
+): Unsubscribe {
+  const q = query(collection(db, COLLECTION), where("role", "==", "player"))
+  return onSnapshot(
+    q,
+    (snap) => onData(snap.docs.map((d) => d.data() as UserProfile)),
+    onError,
+  )
+}
+
+/**
  * One-shot lookup by email. Used by the admin panel to detect whether an
  * email already has a registered account before falling back to the email
  * invite flow. Returns null when no user matches.

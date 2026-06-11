@@ -2,10 +2,13 @@ import * as React from "react"
 import {
   Loader2Icon,
   MailIcon,
+  SearchIcon,
   SendIcon,
   ShieldCheckIcon,
+  ShieldPlusIcon,
   Trash2Icon,
   UserPlusIcon,
+  UsersIcon,
   XIcon,
 } from "lucide-react"
 import { toast } from "sonner"
@@ -43,6 +46,7 @@ import { Heading, Text } from "@/components/ui/typography"
 import { PageContainer } from "@/components/page-container"
 import { useAdminInvites } from "@/hooks/use-admin-invites"
 import { useAdmins } from "@/hooks/use-admins"
+import { useClienteUsers } from "@/hooks/use-cliente-users"
 import { useAuth } from "@/contexts/auth-context"
 import { useAppSettings } from "@/hooks/use-settings"
 import {
@@ -80,6 +84,7 @@ export function AdminPage() {
       <InviteAdminCard />
       <PendingInvitesCard />
       <AdminsCard />
+      <ClientesCard />
       <SignupsToggleCard />
     </PageContainer>
   )
@@ -157,7 +162,7 @@ function InviteAdminCard() {
         )
         setEmail("")
       } else {
-        console.error(err)
+        console.error("Error creating admin invite:", err)
         toast.error("No se pudo crear la invitación.")
       }
     } finally {
@@ -299,7 +304,7 @@ function RevokeInviteButton({ invite }: { invite: AdminInvite }) {
       await deleteInvite(invite.email)
       toast.success("Invitación revocada.")
     } catch (err) {
-      console.error(err)
+      console.error("Error revoking invite:", err)
       toast.error("No se pudo revocar la invitación.")
     }
   }
@@ -449,7 +454,7 @@ function DemoteAdminButton({
       toast.success(`${user.displayName || user.email} ya no es admin.`)
       setOpen(false)
     } catch (err) {
-      console.error(err)
+      console.error("Error demoting admin:", err)
       toast.error("No se pudo cambiar el rol.")
     } finally {
       setWorking(false)
@@ -504,6 +509,158 @@ function DemoteAdminButton({
 }
 
 /* -------------------------------------------------------------------------- */
+/* Registered clientes — promote to admin from a table                         */
+/* -------------------------------------------------------------------------- */
+
+function ClientesCard() {
+  const { clientes, hydrated } = useClienteUsers()
+  const [search, setSearch] = React.useState("")
+
+  const filtered = React.useMemo(() => {
+    const q = search.trim().toLowerCase()
+    const base = q
+      ? clientes.filter(
+          (c) =>
+            c.email.includes(q) || c.displayName.toLowerCase().includes(q),
+        )
+      : clientes
+    // Newest signups first — the person you just invited is who you're
+    // most likely looking for.
+    return [...base].sort((a, b) => b.createdAt - a.createdAt)
+  }, [clientes, search])
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <UsersIcon className="size-4" />
+          Clientes registrados
+          {hydrated && clientes.length > 0 && (
+            <span className="ml-1 rounded-full bg-muted px-2 py-0.5 text-xs font-semibold tabular-nums text-muted-foreground">
+              {clientes.length}
+            </span>
+          )}
+        </CardTitle>
+        <CardDescription>
+          Cuentas con rol jugador. Desde acá los podés convertir en admin sin
+          tipear su email.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="px-0 pb-0">
+        {!hydrated ? (
+          <div className="px-6 pb-6">
+            <Loader2Icon className="mx-auto size-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : clientes.length === 0 ? (
+          <div className="px-6 pb-6 text-center">
+            <Text variant="muted" className="text-sm">
+              Todavía no hay clientes registrados.
+            </Text>
+          </div>
+        ) : (
+          <>
+            <div className="px-6 pb-4">
+              <div className="relative">
+                <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  type="search"
+                  placeholder="Buscar por nombre o email…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-9"
+                  aria-label="Buscar cliente"
+                />
+              </div>
+            </div>
+            {filtered.length === 0 ? (
+              <div className="px-6 pb-6 text-center">
+                <Text variant="muted" className="text-sm">
+                  Ningún cliente coincide con la búsqueda.
+                </Text>
+              </div>
+            ) : (
+              <ClientesTable clientes={filtered} />
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function ClientesTable({ clientes }: { clientes: UserProfile[] }) {
+  return (
+    <div className="overflow-hidden border-t">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="pl-4">Usuario</TableHead>
+            <TableHead className="hidden sm:table-cell">Registrado</TableHead>
+            <TableHead className="pr-4 text-right">Acciones</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {clientes.map((c) => (
+            <TableRow key={c.uid}>
+              <TableCell className="pl-4">
+                <div className="flex flex-col leading-tight">
+                  <span className="font-medium">{c.displayName || c.email}</span>
+                  <span className="text-xs text-muted-foreground">{c.email}</span>
+                </div>
+              </TableCell>
+              <TableCell className="hidden text-muted-foreground sm:table-cell">
+                {new Date(c.createdAt).toLocaleDateString("es-AR", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                })}
+              </TableCell>
+              <TableCell className="pr-4 text-right">
+                <PromoteClienteButton user={c} />
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  )
+}
+
+function PromoteClienteButton({ user }: { user: UserProfile }) {
+  const [working, setWorking] = React.useState(false)
+
+  async function handlePromote() {
+    setWorking(true)
+    try {
+      await setUserRole(user.uid, "admin")
+      toast.success(`${user.displayName || user.email} ahora es admin.`)
+    } catch (err) {
+      console.error("Error promoting cliente to admin:", err)
+      toast.error("No se pudo cambiar el rol.")
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={handlePromote}
+      disabled={working}
+      aria-label={`Hacer admin a ${user.displayName || user.email}`}
+    >
+      {working ? (
+        <Loader2Icon className="size-3.5 animate-spin" />
+      ) : (
+        <ShieldPlusIcon className="size-3.5" />
+      )}
+      Hacer admin
+    </Button>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
 /* Signups toggle (existing feature, kept)                                     */
 /* -------------------------------------------------------------------------- */
 
@@ -517,7 +674,7 @@ function SignupsToggleCard() {
       await saveAppSettings({ signupsEnabled: next })
       toast.success(next ? "Registro habilitado" : "Registro deshabilitado")
     } catch (err) {
-      console.error(err)
+      console.error("Error toggling signups:", err)
       toast.error("No se pudo guardar el cambio")
     } finally {
       setSaving(false)

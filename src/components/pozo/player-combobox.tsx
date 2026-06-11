@@ -10,8 +10,7 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { useScrollOnOpen } from "@/hooks/use-scroll-on-open"
+import { ResponsiveCombo } from "@/components/ui/responsive-combo"
 import { cn } from "@/lib/utils"
 import { findPlayerByName, normalizeName, type PlayerRecord } from "@/lib/players"
 
@@ -55,10 +54,6 @@ export function PlayerCombobox({
 }: Props) {
   const [open, setOpen] = React.useState(false)
   const [search, setSearch] = React.useState("")
-  // On mobile, scroll the trigger up when the popover opens so the
-  // CommandInput stays visible above the soft keyboard.
-  const triggerRef = React.useRef<HTMLButtonElement>(null)
-  useScrollOnOpen(triggerRef, open)
 
   // Suggestions: hide the players already picked in other slots, but always
   // keep the currently-selected one visible (so the user can confirm it).
@@ -95,91 +90,90 @@ export function PlayerCombobox({
   const displayName = value.name.trim()
   const isExistingPlayer = Boolean(value.id)
 
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        ref={triggerRef}
-        disabled={disabled}
-        className={cn(
-          "flex h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-sm transition-colors",
-          // scroll-mt leaves room for the sticky site-header when the
-          // mobile keyboard-avoidance scroll fires.
-          "scroll-mt-16",
-          "hover:bg-accent/40",
-          "focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:border-ring",
-          "disabled:cursor-not-allowed disabled:opacity-50",
-          "data-[state=open]:bg-accent/40",
-        )}
-        aria-label={label}
-      >
-        <span className="flex min-w-0 flex-1 items-center gap-2">
-          <UserIcon
-            className={cn(
-              "size-3.5 shrink-0",
-              isExistingPlayer ? "text-primary" : "text-muted-foreground",
-            )}
-          />
-          <span
-            className={cn(
-              "truncate text-left",
-              !displayName && "text-muted-foreground",
-            )}
-          >
-            {displayName || placeholder}
-          </span>
-          {!isExistingPlayer && displayName && (
-            <span className="shrink-0 rounded-sm bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              nuevo
-            </span>
+  const trigger = (
+    <button
+      type="button"
+      disabled={disabled}
+      className={cn(
+        "flex h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-sm transition-colors",
+        "hover:bg-accent/40",
+        "focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:border-ring",
+        "disabled:cursor-not-allowed disabled:opacity-50",
+        "data-[state=open]:bg-accent/40",
+      )}
+      aria-label={label}
+    >
+      <span className="flex min-w-0 flex-1 items-center gap-2">
+        <UserIcon
+          className={cn(
+            "size-3.5 shrink-0",
+            isExistingPlayer ? "text-primary" : "text-muted-foreground",
           )}
-        </span>
-        <ChevronsUpDownIcon className="size-4 shrink-0 text-muted-foreground" />
-      </PopoverTrigger>
-      <PopoverContent
-        className="w-(--anchor-width) p-0"
-        align="start"
-        sideOffset={4}
-      >
-        <Command
-          // Disable cmdk's default filter — we filter ourselves so we control
-          // how the "create new" row interacts with normalized search.
-          shouldFilter={false}
+        />
+        <span
+          className={cn(
+            "truncate text-left",
+            !displayName && "text-muted-foreground",
+          )}
         >
-          <CommandInput
-            value={search}
-            onValueChange={setSearch}
-            placeholder="Buscar o crear…"
-            autoFocus
+          {displayName || placeholder}
+        </span>
+        {!isExistingPlayer && displayName && (
+          <span className="shrink-0 rounded-sm bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            nuevo
+          </span>
+        )}
+      </span>
+      <ChevronsUpDownIcon className="size-4 shrink-0 text-muted-foreground" />
+    </button>
+  )
+
+  return (
+    <ResponsiveCombo
+      open={open}
+      onOpenChange={setOpen}
+      title={label ?? "Elegir jugador"}
+      trigger={trigger}
+    >
+      <Command
+        // Disable cmdk's default filter — we filter ourselves so we control
+        // how the "create new" row interacts with normalized search.
+        shouldFilter={false}
+      >
+        <CommandInput
+          value={search}
+          onValueChange={setSearch}
+          placeholder="Buscar o crear…"
+          autoFocus
+        />
+        <CommandList>
+          <FilteredList
+            players={suggestions}
+            search={search}
+            selectedId={value.id}
+            recentIds={recentIds}
+            onPick={pickExisting}
           />
-          <CommandList>
-            <FilteredList
-              players={suggestions}
-              search={search}
-              selectedId={value.id}
-              recentIds={recentIds}
-              onPick={pickExisting}
-            />
-            {showCreate && (
-              <>
-                {suggestions.length > 0 && <CommandSeparator />}
-                <CommandGroup heading="Nuevo">
-                  <CommandItem
-                    value={`__create__${search}`}
-                    onSelect={() => createNew(search)}
-                  >
-                    <PlusIcon className="size-4" />
-                    Crear &quot;{search.trim()}&quot;
-                  </CommandItem>
-                </CommandGroup>
-              </>
-            )}
-            {!showCreate && suggestions.length === 0 && (
-              <CommandEmpty>Escribí un nombre…</CommandEmpty>
-            )}
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+          {showCreate && (
+            <>
+              {suggestions.length > 0 && <CommandSeparator />}
+              <CommandGroup heading="Nuevo">
+                <CommandItem
+                  value={`__create__${search}`}
+                  onSelect={() => createNew(search)}
+                >
+                  <PlusIcon className="size-4" />
+                  Crear &quot;{search.trim()}&quot;
+                </CommandItem>
+              </CommandGroup>
+            </>
+          )}
+          {!showCreate && suggestions.length === 0 && (
+            <CommandEmpty>Escribí un nombre…</CommandEmpty>
+          )}
+        </CommandList>
+      </Command>
+    </ResponsiveCombo>
   )
 }
 

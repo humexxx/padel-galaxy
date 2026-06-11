@@ -11,8 +11,7 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { useScrollOnOpen } from "@/hooks/use-scroll-on-open"
+import { ResponsiveCombo } from "@/components/ui/responsive-combo"
 import { cn } from "@/lib/utils"
 import { normalizeName } from "@/lib/players"
 import type { GroupRecord } from "@/lib/groups"
@@ -43,10 +42,6 @@ export function GroupMultiSelect({
 }: Props) {
   const [open, setOpen] = React.useState(false)
   const [search, setSearch] = React.useState("")
-  // On mobile, scroll the trigger up when the popover opens so the
-  // CommandInput stays visible above the soft keyboard.
-  const triggerRef = React.useRef<HTMLButtonElement>(null)
-  useScrollOnOpen(triggerRef, open)
 
   const selected = React.useMemo(
     () => groups.filter((g) => value.has(g.id)),
@@ -84,89 +79,93 @@ export function GroupMultiSelect({
         ? selected[0].name
         : `${selected.length} grupos`
 
+  const trigger = (
+    <button
+      type="button"
+      className={cn(
+        "inline-flex h-9 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm transition-colors",
+        "hover:bg-accent/40",
+        "focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:border-ring",
+        "data-[state=open]:bg-accent/40",
+      )}
+    >
+      <FolderIcon
+        className={cn(
+          "size-3.5 shrink-0",
+          selected.length > 0 ? "text-primary" : "text-muted-foreground",
+        )}
+      />
+      <span
+        className={cn(
+          "max-w-[16ch] truncate",
+          selected.length === 0 && "text-muted-foreground",
+        )}
+      >
+        {triggerLabel}
+      </span>
+      <ChevronsUpDownIcon className="size-4 shrink-0 text-muted-foreground" />
+    </button>
+  )
+
   return (
     <div className={cn("flex flex-wrap items-center gap-2", className)}>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger
-          ref={triggerRef}
-          className={cn(
-            "inline-flex h-9 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm transition-colors",
-            // scroll-mt leaves room for the sticky site-header during
-            // the mobile keyboard-avoidance scroll.
-            "scroll-mt-16",
-            "hover:bg-accent/40",
-            "focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:border-ring",
-            "data-[state=open]:bg-accent/40",
-          )}
-        >
-          <FolderIcon
-            className={cn(
-              "size-3.5 shrink-0",
-              selected.length > 0 ? "text-primary" : "text-muted-foreground",
-            )}
+      <ResponsiveCombo
+        open={open}
+        onOpenChange={setOpen}
+        title="Filtrar por grupo"
+        trigger={trigger}
+        popoverClassName="w-64"
+      >
+        <Command shouldFilter={false}>
+          <CommandInput
+            value={search}
+            onValueChange={setSearch}
+            placeholder="Buscar grupo…"
+            autoFocus
           />
-          <span
-            className={cn(
-              "max-w-[16ch] truncate",
-              selected.length === 0 && "text-muted-foreground",
-            )}
-          >
-            {triggerLabel}
-          </span>
-          <ChevronsUpDownIcon className="size-4 shrink-0 text-muted-foreground" />
-        </PopoverTrigger>
-        <PopoverContent className="w-64 p-0" align="start" sideOffset={4}>
-          <Command shouldFilter={false}>
-            <CommandInput
-              value={search}
-              onValueChange={setSearch}
-              placeholder="Buscar grupo…"
-              autoFocus
-            />
-            <CommandList>
-              {filtered.length === 0 ? (
-                <CommandEmpty>Sin grupos que coincidan.</CommandEmpty>
-              ) : (
-                <CommandGroup>
-                  {filtered.map((g) => {
-                    const isSelected = value.has(g.id)
-                    return (
-                      <CommandItem
-                        key={g.id}
-                        value={g.id}
-                        keywords={[g.name, g.nameLower]}
-                        onSelect={() => toggle(g.id)}
-                      >
-                        <CheckIcon
-                          className={cn(
-                            "size-4",
-                            isSelected ? "opacity-100" : "opacity-0",
-                          )}
-                        />
-                        <span className="truncate">{g.name}</span>
-                      </CommandItem>
-                    )
-                  })}
-                </CommandGroup>
-              )}
-              {value.size > 0 && (
-                <>
-                  <CommandSeparator />
-                  <CommandGroup>
+          <CommandList>
+            {filtered.length === 0 ? (
+              <CommandEmpty>Sin grupos que coincidan.</CommandEmpty>
+            ) : (
+              <CommandGroup>
+                {filtered.map((g) => {
+                  const isSelected = value.has(g.id)
+                  return (
                     <CommandItem
-                      value="__clear__"
-                      onSelect={clear}
-                      className="justify-center text-muted-foreground"
+                      key={g.id}
+                      value={g.id}
+                      keywords={[g.name, g.nameLower]}
+                      onSelect={() => toggle(g.id)}
                     >
-                      Limpiar selección
+                      <CheckIcon
+                        className={cn(
+                          "size-4",
+                          isSelected ? "opacity-100" : "opacity-0",
+                        )}
+                      />
+                      <span className="truncate">{g.name}</span>
                     </CommandItem>
-                  </CommandGroup>
-                </>
-              )}
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
+                  )
+                })}
+              </CommandGroup>
+            )}
+            {value.size > 0 && (
+              <>
+                <CommandSeparator />
+                <CommandGroup>
+                  <CommandItem
+                    value="__clear__"
+                    onSelect={clear}
+                    className="justify-center text-muted-foreground"
+                  >
+                    Limpiar selección
+                  </CommandItem>
+                </CommandGroup>
+              </>
+            )}
+          </CommandList>
+        </Command>
+      </ResponsiveCombo>
 
       {/* Inline chips for each selected group — one click on the X removes
           that single group without touching the rest. */}

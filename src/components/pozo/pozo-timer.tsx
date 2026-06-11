@@ -1,6 +1,10 @@
+import * as React from "react"
 import { motion } from "framer-motion"
+import { BellIcon, BellOffIcon } from "lucide-react"
 
 import { useNow } from "@/hooks/use-now"
+import { playTimerAlarm } from "@/lib/alarm"
+import { setTimerAlarmEnabled, useTimerAlarmEnabled } from "@/lib/preferences"
 import { cn } from "@/lib/utils"
 import { formatDuration } from "@/lib/time"
 
@@ -11,6 +15,13 @@ type Props = {
   /** "large" makes the timer visually dominant — used during warmup when
    * there's nothing else on screen. "default" is the in-play compact size. */
   size?: "default" | "large"
+  /** Secondary countdown pinned to the card's top-right corner — used for
+   * the whole-pozo clock while the main digits track the current match. */
+  secondary?: { label: string; endsAt: number }
+  /** Beep (+ vibrate) when the main countdown hits zero. Renders a bell
+   * toggle in the top-left corner so it can be muted from this screen;
+   * the preference persists per-device in localStorage. */
+  alarm?: boolean
 }
 
 /**
@@ -24,11 +35,26 @@ export function PozoTimer({
   endsAt,
   variant = "play",
   size = "default",
+  secondary,
+  alarm = false,
 }: Props) {
   const now = useNow(1000)
   const remaining = Math.max(0, endsAt - now)
   const ended = remaining === 0
   const isLarge = size === "large"
+
+  const alarmEnabled = useTimerAlarmEnabled()
+  // Fire only on the transition >0 → 0 while mounted. Initializing the ref
+  // with the current remaining means a timer that mounts already expired
+  // (e.g. reopening a stale pozo) stays silent.
+  const prevRemaining = React.useRef(remaining)
+  React.useEffect(() => {
+    const prev = prevRemaining.current
+    prevRemaining.current = remaining
+    if (alarm && alarmEnabled && prev > 0 && remaining === 0) {
+      playTimerAlarm()
+    }
+  }, [alarm, alarmEnabled, remaining])
 
   return (
     <motion.div
@@ -48,6 +74,35 @@ export function PozoTimer({
           : "from-emerald-500/15 via-emerald-500/5 to-transparent border-emerald-500/40",
       )}
     >
+      {alarm && (
+        <button
+          type="button"
+          onClick={() => setTimerAlarmEnabled(!alarmEnabled)}
+          aria-label={alarmEnabled ? "Silenciar alarma" : "Activar alarma"}
+          title={
+            alarmEnabled
+              ? "Suena una alarma cuando el tiempo llega a cero"
+              : "Alarma silenciada"
+          }
+          className="absolute top-2.5 left-2.5 rounded-full p-2 text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
+        >
+          {alarmEnabled ? (
+            <BellIcon className="size-4" />
+          ) : (
+            <BellOffIcon className="size-4" />
+          )}
+        </button>
+      )}
+      {secondary && (
+        <div className="absolute top-2.5 right-2.5 rounded-lg bg-background/60 px-2.5 py-1.5 text-right backdrop-blur-sm">
+          <p className="text-[9px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+            {secondary.label}
+          </p>
+          <p className="font-mono text-sm font-semibold tabular-nums text-foreground/80">
+            {formatDuration(Math.max(0, secondary.endsAt - now))}
+          </p>
+        </div>
+      )}
       <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-muted-foreground">
         {label}
       </p>

@@ -51,6 +51,7 @@ import { StandingsTable } from "@/components/pozo/standings-table"
 import {
   advanceRound,
   beginPlay,
+  computeRoundEndsAt,
   finishPozo,
   getCurrentMatches,
   isRoundComplete,
@@ -58,7 +59,7 @@ import {
   startPozo,
 } from "@/lib/pozo/factory"
 import { computeStandings, sortStandings, type StandingsSort } from "@/lib/pozo/standings"
-import type { Pozo } from "@/lib/pozo/types"
+import type { Match, Pozo } from "@/lib/pozo/types"
 
 type UpdaterFn = (current: Pozo) => Pozo
 
@@ -149,6 +150,9 @@ export function PozoView({ pozo, onUpdate }: Props) {
   const warmupActive = pozo.status === "warmup" && pozo.warmupEndsAt !== null
   const warmupEndsAt = pozo.warmupEndsAt ?? 0
   const endsAt = pozo.endsAt ?? 0
+  // Per-match countdown for the round in play. Null on legacy pozos started
+  // before `roundStartedAt` existed — those keep the whole-pozo clock big.
+  const roundEndsAt = computeRoundEndsAt(pozo)
 
   function handleNextRound() {
     onUpdate((p) => advanceRound(p))
@@ -169,7 +173,7 @@ export function PozoView({ pozo, onUpdate }: Props) {
       let next = p
       for (const m of getCurrentMatches(p)) {
         if (m.gamesA !== null && m.gamesB !== null) continue
-        let a = Math.floor(Math.random() * 8)
+        const a = Math.floor(Math.random() * 8)
         let b = Math.floor(Math.random() * 8)
         if (a === b) b = (b + 1) % 8
         next = recordMatchResult(next, m.id, a, b)
@@ -196,10 +200,22 @@ export function PozoView({ pozo, onUpdate }: Props) {
           transition-colors can animate the amber → emerald swap on the same
           DOM node. */}
       <PozoTimer
-        label={warmupActive ? "Calentamiento" : "Pozo en juego"}
-        endsAt={warmupActive ? warmupEndsAt : endsAt}
+        label={
+          warmupActive
+            ? "Calentamiento"
+            : roundEndsAt !== null
+              ? `Partido · Ronda ${pozo.currentRound + 1} de ${pozo.totalRounds}`
+              : "Pozo en juego"
+        }
+        endsAt={warmupActive ? warmupEndsAt : (roundEndsAt ?? endsAt)}
         variant={warmupActive ? "warmup" : "play"}
         size={warmupActive ? "large" : "default"}
+        secondary={
+          !warmupActive && roundEndsAt !== null
+            ? { label: "Pozo", endsAt }
+            : undefined
+        }
+        alarm
       />
       <AnimatePresence>
         {warmupActive && canEdit && (
@@ -490,7 +506,7 @@ function FinishedView({
   // O(rounds × matches). With 10 rounds × 40 matches the old code did 400
   // filter iterations every render; this builds the map once.
   const matchesByRound = React.useMemo(() => {
-    const map = new Map<number, typeof pozo.matches>()
+    const map = new Map<number, Match[]>()
     for (const m of pozo.matches) {
       const list = map.get(m.round)
       if (list) list.push(m)

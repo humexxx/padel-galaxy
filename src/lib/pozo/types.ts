@@ -68,6 +68,14 @@ export type Pozo = {
   warmupEndsAt: number | null
   endsAt: number | null
   finishedAt: number | null
+  /**
+   * Millis when the CURRENT round started playing. Set by `beginPlay` and
+   * refreshed by `advanceRound`; used to derive the per-match countdown
+   * (`roundStartedAt + matchDuration`). Optional for backwards-compat:
+   * pozos started before this field existed fall back to the whole-pozo
+   * timer.
+   */
+  roundStartedAt?: number | null
 }
 
 export type PlayerStanding = {

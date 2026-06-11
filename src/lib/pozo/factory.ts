@@ -59,6 +59,7 @@ export function createPozo(input: {
     warmupEndsAt: null,
     endsAt: null,
     finishedAt: null,
+    roundStartedAt: null,
   }
 }
 
@@ -83,9 +84,9 @@ export function startPozo(pozo: Pozo, now: number = Date.now()): Pozo {
   }
 }
 
-export function beginPlay(pozo: Pozo): Pozo {
+export function beginPlay(pozo: Pozo, now: number = Date.now()): Pozo {
   if (pozo.status !== "warmup") return pozo
-  return { ...pozo, status: "playing" }
+  return { ...pozo, status: "playing", roundStartedAt: now }
 }
 
 export function getCurrentMatches(pozo: Pozo): Match[] {
@@ -112,14 +113,14 @@ export function recordMatchResult(
   }
 }
 
-export function advanceRound(pozo: Pozo): Pozo {
+export function advanceRound(pozo: Pozo, now: number = Date.now()): Pozo {
   if (!isRoundComplete(pozo)) return pozo
   const nextRoundIndex = pozo.currentRound + 1
   if (nextRoundIndex >= pozo.totalRounds) {
     return {
       ...pozo,
       status: "finished",
-      finishedAt: Date.now(),
+      finishedAt: now,
       currentRound: pozo.totalRounds - 1,
     }
   }
@@ -128,6 +129,7 @@ export function advanceRound(pozo: Pozo): Pozo {
     ...pozo,
     matches: [...pozo.matches, ...nextMatches],
     currentRound: nextRoundIndex,
+    roundStartedAt: now,
   }
 }
 
@@ -143,4 +145,17 @@ export function computeMatchDurationMin(config: PozoConfig, totalRounds: number)
     ? Math.max(0, config.totalDurationMin - config.warmupMin)
     : config.totalDurationMin
   return playMin / totalRounds
+}
+
+/**
+ * When the CURRENT round's clock runs out, in epoch millis. Null when the
+ * pozo isn't in play or predates `roundStartedAt` (legacy docs) — callers
+ * fall back to the whole-pozo `endsAt` countdown in that case.
+ */
+export function computeRoundEndsAt(pozo: Pozo): number | null {
+  if (pozo.status !== "playing") return null
+  if (typeof pozo.roundStartedAt !== "number") return null
+  const matchMs = computeMatchDurationMin(pozo.config, pozo.totalRounds) * 60_000
+  if (matchMs <= 0) return null
+  return pozo.roundStartedAt + matchMs
 }

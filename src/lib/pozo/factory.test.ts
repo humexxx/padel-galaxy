@@ -2,8 +2,12 @@ import { describe, it, expect } from "vitest"
 
 import {
   DEFAULT_CONFIG,
+  advanceRound,
+  beginPlay,
   computeMatchDurationMin,
+  computeRoundEndsAt,
   createPozo,
+  recordMatchResult,
   startPozo,
 } from "./factory"
 import type { PozoConfig } from "./types"
@@ -101,5 +105,53 @@ describe("computeMatchDurationMin — warmupIncludedInTotal flag", () => {
 
   it("returns 0 for 0 rounds (no division by zero)", () => {
     expect(computeMatchDurationMin(makeConfig(), 0)).toBe(0)
+  })
+})
+
+describe("per-round clock — roundStartedAt / computeRoundEndsAt", () => {
+  function startPlaying(now: number) {
+    const pozo = createPozo({
+      name: "T",
+      ownerId: "o",
+      players: PLAYERS,
+      config: makeConfig({ totalDurationMin: 90, warmupMin: 5 }),
+    })
+    return beginPlay(startPozo(pozo, now), now)
+  }
+
+  it("beginPlay stamps roundStartedAt", () => {
+    const playing = startPlaying(1_000_000)
+    expect(playing.status).toBe("playing")
+    expect(playing.roundStartedAt).toBe(1_000_000)
+  })
+
+  it("computeRoundEndsAt = roundStartedAt + match duration", () => {
+    const playing = startPlaying(1_000_000)
+    const matchMs =
+      computeMatchDurationMin(playing.config, playing.totalRounds) * 60_000
+    expect(computeRoundEndsAt(playing)).toBe(1_000_000 + matchMs)
+  })
+
+  it("advanceRound refreshes roundStartedAt for the next round", () => {
+    let playing = startPlaying(1_000_000)
+    for (const m of playing.matches) {
+      playing = recordMatchResult(playing, m.id, 6, 3)
+    }
+    const advanced = advanceRound(playing, 2_000_000)
+    expect(advanced.currentRound).toBe(1)
+    expect(advanced.roundStartedAt).toBe(2_000_000)
+  })
+
+  it("returns null while not playing and on legacy docs without the field", () => {
+    const pozo = createPozo({
+      name: "T",
+      ownerId: "o",
+      players: PLAYERS,
+      config: makeConfig(),
+    })
+    expect(computeRoundEndsAt(pozo)).toBeNull()
+    expect(computeRoundEndsAt(startPozo(pozo, 1_000_000))).toBeNull()
+    const legacy = { ...startPlaying(1_000_000), roundStartedAt: undefined }
+    expect(computeRoundEndsAt(legacy)).toBeNull()
   })
 })

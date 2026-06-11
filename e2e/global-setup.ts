@@ -281,7 +281,6 @@ async function seedLinkedPlayer(
 }
 
 export default async function globalSetup() {
-  // eslint-disable-next-line no-console
   console.log(
     `[e2e] seeding ${Object.keys(E2E_USERS).length} users in ${AUTH_EMULATOR_HOST}…`,
   )
@@ -291,7 +290,6 @@ export default async function globalSetup() {
   // owned by the organizer. This makes the player's "Mi perfil" nav item
   // resolve to a real /jugadores/:id page in the player-flow specs.
   await seedLinkedPlayer(E2E_USERS.organizer, E2E_USERS.player)
-  // eslint-disable-next-line no-console
   console.log(
     `[e2e] seed OK (${Object.values(E2E_USERS)
       .map((u) => `${u.key}=${u.uid?.slice(0, 6)}`)

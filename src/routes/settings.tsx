@@ -113,7 +113,7 @@ export function SettingsPage() {
       await user.reload()
       toast.success("Cambios guardados")
     } catch (err) {
-      console.error(err)
+      console.error("Error saving profile:", err)
       toast.error("No se pudo guardar")
     } finally {
       setSaving(false)
@@ -558,7 +558,7 @@ function PrivacySection({
         await onRequiresRecentLogin()
         return
       }
-      console.error(err)
+      console.error("Error deleting account:", err)
       toast.error(
         err instanceof Error
           ? `No se pudo borrar la cuenta: ${err.message}`

@@ -109,7 +109,6 @@ vi.mock("@/lib/firebase", () => ({
 }))
 
 // Import AFTER the mocks so the page picks up the stubs.
-// eslint-disable-next-line import/first
 import { SettingsPage } from "./settings"
 
 function renderPage() {

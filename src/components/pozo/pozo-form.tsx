@@ -304,7 +304,7 @@ export function PozoForm() {
       }
       navigate(`/pozos/${pozo.id}`)
     } catch (err) {
-      console.error(err)
+      console.error("Error creating pozo:", err)
       toast.error("No se pudo guardar el pozo")
       setSubmitting(false)
     }

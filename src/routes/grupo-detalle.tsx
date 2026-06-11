@@ -113,7 +113,12 @@ export function GrupoDetallePage() {
     setVisibleIds(ids)
   }, [aggregate, typicalPlayersPerPozo, visibleIds])
 
-  const effectiveVisible = visibleIds ?? new Set<string>()
+  // Memoized so the `chartData` memo below doesn't see a fresh Set (and
+  // recompute) on every render while `visibleIds` is still null.
+  const effectiveVisible = React.useMemo(
+    () => visibleIds ?? new Set<string>(),
+    [visibleIds],
+  )
 
   function toggleVisible(playerId: string) {
     setVisibleIds((prev) => {

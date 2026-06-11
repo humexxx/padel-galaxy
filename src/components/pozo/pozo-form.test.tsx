@@ -144,7 +144,6 @@ vi.mock("@/lib/firebase", () => ({
 }))
 
 // Import AFTER mocks are declared so the form picks up the stubs.
-// eslint-disable-next-line import/first
 import { PozoForm } from "./pozo-form"
 
 // ---------- Helpers ----------

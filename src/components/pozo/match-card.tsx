@@ -81,17 +81,22 @@ function MatchCardImpl({ match, playerById, onSubmit, readOnly }: Props) {
 
   // saveRef.current always holds the latest "best known" save fn so the
   // unmount cleanup uses up-to-date local state without stale closures.
+  // Assigned in an effect (not during render) per the rules of refs; the
+  // only readers run after paint (debounce timer, unmount cleanup), so the
+  // one-frame lag is unobservable.
   const saveRef = React.useRef<() => void>(() => undefined)
-  saveRef.current = () => {
-    const a = parseScore(gamesA)
-    const b = parseScore(gamesB)
-    if (a === null || b === null) return
-    if (a === match.gamesA && b === match.gamesB) return
-    onSubmit(match.id, a, b)
-    setSaveState("saved")
-    if (fadeRef.current) window.clearTimeout(fadeRef.current)
-    fadeRef.current = window.setTimeout(() => setSaveState("idle"), SAVED_FADE_MS)
-  }
+  React.useEffect(() => {
+    saveRef.current = () => {
+      const a = parseScore(gamesA)
+      const b = parseScore(gamesB)
+      if (a === null || b === null) return
+      if (a === match.gamesA && b === match.gamesB) return
+      onSubmit(match.id, a, b)
+      setSaveState("saved")
+      if (fadeRef.current) window.clearTimeout(fadeRef.current)
+      fadeRef.current = window.setTimeout(() => setSaveState("idle"), SAVED_FADE_MS)
+    }
+  })
 
   function scheduleSave(nextA: string, nextB: string) {
     setGamesA(nextA)

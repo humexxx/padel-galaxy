@@ -388,7 +388,7 @@ function CreateGroupDialog({ existingGroups }: { existingGroups: GroupRecord[] }
       setName("")
       setOpen(false)
     } catch (err) {
-      console.error(err)
+      console.error("Error creating group:", err)
       toast.error("No se pudo crear el grupo")
     } finally {
       setSaving(false)

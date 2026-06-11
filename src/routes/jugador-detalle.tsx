@@ -4,6 +4,8 @@ import {
   ArrowLeftIcon,
   CheckCircle2Icon,
   ClockIcon,
+  GitMergeIcon,
+  Loader2Icon,
   MailIcon,
   TrendingUpIcon,
   UserIcon,
@@ -18,6 +20,23 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { LineChart } from "@/components/ui/line-chart"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -26,9 +45,11 @@ import { PageContainer } from "@/components/page-container"
 import { GroupMultiSelect } from "@/components/pozo/group-multi-select"
 import { useAuth } from "@/contexts/auth-context"
 import { useGroups } from "@/hooks/use-groups"
-import { usePlayer } from "@/hooks/use-players"
+import { usePlayer, usePlayers } from "@/hooks/use-players"
 import { usePlayerHistory } from "@/hooks/use-player-history"
 import { sendPlayerInvite } from "@/lib/invites"
+import { normalizeName, type PlayerRecord } from "@/lib/players"
+import { isMergeBlocked, mergePlayers } from "@/lib/players-merge"
 import { cn } from "@/lib/utils"
 import type { StandingsSort } from "@/lib/pozo/standings"
 import type { PlayerPozoStat } from "@/lib/player-stats"
@@ -240,6 +261,7 @@ export function JugadorDetallePage() {
       </div>
 
       {isAdmin && <InviteCard player={player} />}
+      {isAdmin && <MergeCard player={player} />}
 
       <Card>
         <CardHeader>
@@ -412,6 +434,165 @@ function AccountStatus({
   )
 }
 
+/**
+ * Admin tool: absorb a duplicate roster record into this player. The picked
+ * duplicate's pozos/matches get re-pointed here and its record is deleted.
+ * Useful when the same person was created twice across different pozos.
+ */
+function MergeCard({ player }: { player: PlayerRecord }) {
+  const { players } = usePlayers()
+  const [open, setOpen] = React.useState(false)
+  const [candidate, setCandidate] = React.useState<PlayerRecord | null>(null)
+  const [search, setSearch] = React.useState("")
+  const [working, setWorking] = React.useState(false)
+
+  const candidates = React.useMemo(() => {
+    const q = normalizeName(search)
+    return players
+      .filter((p) => p.id !== player.id)
+      .filter((p) => (q ? p.nameLower.includes(q) : true))
+      .slice(0, 50)
+  }, [players, player.id, search])
+
+  function handleOpenChange(next: boolean) {
+    setOpen(next)
+    if (!next) {
+      setCandidate(null)
+      setSearch("")
+    }
+  }
+
+  async function handleMerge() {
+    if (!candidate) return
+    setWorking(true)
+    try {
+      const { pozosUpdated } = await mergePlayers(candidate, player)
+      toast.success(
+        `«${candidate.name}» se fusionó en «${player.name}» — ${pozosUpdated} ${
+          pozosUpdated === 1 ? "pozo actualizado" : "pozos actualizados"
+        }.`,
+      )
+      handleOpenChange(false)
+    } catch (err) {
+      console.error("Error merging players:", err)
+      toast.error(err instanceof Error ? err.message : "No se pudo fusionar.")
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <GitMergeIcon className="size-4" />
+          Fusionar duplicado
+        </CardTitle>
+        <CardDescription>
+          ¿La misma persona quedó cargada dos veces? Elegí el registro
+          duplicado: sus pozos y resultados pasan a {player.name} y el
+          duplicado se elimina.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Dialog open={open} onOpenChange={handleOpenChange}>
+          <DialogTrigger render={<Button type="button" variant="outline" />}>
+            <GitMergeIcon className="size-4" />
+            Elegir jugador duplicado…
+          </DialogTrigger>
+          <DialogContent>
+            {candidate === null ? (
+              <>
+                <DialogHeader>
+                  <DialogTitle>¿Cuál es el duplicado?</DialogTitle>
+                  <DialogDescription>
+                    Buscá el registro que sobra. Los que están vinculados a
+                    otra cuenta no se pueden fusionar.
+                  </DialogDescription>
+                </DialogHeader>
+                <Command shouldFilter={false} className="rounded-lg border">
+                  <CommandInput
+                    value={search}
+                    onValueChange={setSearch}
+                    placeholder="Buscar jugador…"
+                    autoFocus
+                  />
+                  <CommandList className="max-h-56">
+                    {candidates.length === 0 ? (
+                      <CommandEmpty>Sin jugadores que coincidan.</CommandEmpty>
+                    ) : (
+                      <CommandGroup>
+                        {candidates.map((p) => {
+                          const blocked = isMergeBlocked(p, player)
+                          return (
+                            <CommandItem
+                              key={p.id}
+                              value={p.id}
+                              disabled={blocked}
+                              onSelect={() => setCandidate(p)}
+                            >
+                              <UserIcon className="size-4 text-muted-foreground" />
+                              <span className="truncate">{p.name}</span>
+                              {blocked && (
+                                <span className="ml-auto text-[10px] uppercase tracking-wide text-muted-foreground">
+                                  otra cuenta
+                                </span>
+                              )}
+                            </CommandItem>
+                          )
+                        })}
+                      </CommandGroup>
+                    )}
+                  </CommandList>
+                </Command>
+              </>
+            ) : (
+              <>
+                <DialogHeader>
+                  <DialogTitle>¿Fusionar «{candidate.name}»?</DialogTitle>
+                  <DialogDescription>
+                    Todos los pozos y resultados de{" "}
+                    <span className="font-medium">{candidate.name}</span> pasan
+                    a <span className="font-medium">{player.name}</span>, y el
+                    registro duplicado se elimina. Esta acción no se puede
+                    deshacer.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => setCandidate(null)}
+                    disabled={working}
+                  >
+                    Volver
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={handleMerge}
+                    disabled={working}
+                  >
+                    {working ? (
+                      <>
+                        <Loader2Icon className="size-4 animate-spin" />
+                        Fusionando…
+                      </>
+                    ) : (
+                      <>
+                        <GitMergeIcon className="size-4" />
+                        Fusionar
+                      </>
+                    )}
+                  </Button>
+                </DialogFooter>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
+      </CardContent>
+    </Card>
+  )
+}
+
 function InviteCard({
   player,
 }: {
@@ -448,7 +629,7 @@ function InviteCard({
         player.invitedAt ? "Invitación re-enviada" : "Invitación enviada",
       )
     } catch (err) {
-      console.error(err)
+      console.error("Error sending player invite:", err)
       toast.error(err instanceof Error ? err.message : "No se pudo enviar")
     } finally {
       setSending(false)

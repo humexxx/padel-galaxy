@@ -2,12 +2,18 @@ import * as React from "react"
 import { useNavigate, useSearchParams } from "react-router"
 import { toast } from "sonner"
 import { FirebaseError } from "firebase/app"
-import { Loader2Icon } from "lucide-react"
+import { EyeIcon, EyeOffIcon, Loader2Icon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@/components/ui/input-group"
 import { Heading, Text } from "@/components/ui/typography"
 import { SignupsDisabledError, useAuth } from "@/contexts/auth-context"
 import { useAppSettings } from "@/hooks/use-settings"
@@ -46,6 +52,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"form">)
   }, [signupsEnabled, mode])
   const [email, setEmail] = React.useState("")
   const [password, setPassword] = React.useState("")
+  const [showPassword, setShowPassword] = React.useState(false)
   const [loading, setLoading] = React.useState(false)
   const [googleLoading, setGoogleLoading] = React.useState(false)
 
@@ -141,17 +148,30 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"form">)
         </Field>
         <Field>
           <FieldLabel htmlFor="password">Contraseña</FieldLabel>
-          <Input
-            id="password"
-            name="password"
-            type="password"
-            autoComplete={mode === "signin" ? "current-password" : "new-password"}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            minLength={6}
-            disabled={busy}
-          />
+          <InputGroup>
+            <InputGroupInput
+              id="password"
+              name="password"
+              type={showPassword ? "text" : "password"}
+              autoComplete={mode === "signin" ? "current-password" : "new-password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={6}
+              disabled={busy}
+            />
+            <InputGroupAddon align="inline-end">
+              <InputGroupButton
+                size="icon-xs"
+                onClick={() => setShowPassword((v) => !v)}
+                disabled={busy}
+                aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                aria-pressed={showPassword}
+              >
+                {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+              </InputGroupButton>
+            </InputGroupAddon>
+          </InputGroup>
         </Field>
         <Field>
           <Button type="submit" disabled={busy}>

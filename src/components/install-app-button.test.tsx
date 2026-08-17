@@ -1,0 +1,122 @@
+// @vitest-environment jsdom
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { act, render, screen } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
+
+const IOS_UA =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"
+const ANDROID_UA =
+  "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Mobile Safari/537.36"
+
+function stubUserAgent(ua: string) {
+  vi.spyOn(navigator, "userAgent", "get").mockReturnValue(ua)
+}
+
+function stubDisplayMode(standalone: boolean) {
+  vi.spyOn(window, "matchMedia").mockImplementation(
+    (query: string) =>
+      ({
+        matches: standalone && query.includes("standalone"),
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        onchange: null,
+        dispatchEvent: () => false,
+      }) as unknown as MediaQueryList,
+  )
+}
+
+/** Fresh module state per test — `pwa.ts` parks the event at module scope. */
+async function setup() {
+  vi.resetModules()
+  const pwa = await import("@/lib/pwa")
+  const { InstallAppButton } = await import("@/components/install-app-button")
+  pwa.initPwa()
+  return { InstallAppButton }
+}
+
+/** Stand-in for Chrome's non-standard BeforeInstallPromptEvent. */
+function fireInstallPrompt() {
+  const prompt = vi.fn().mockResolvedValue(undefined)
+  const event = Object.assign(new Event("beforeinstallprompt"), {
+    prompt,
+    userChoice: Promise.resolve({ outcome: "accepted" as const }),
+  })
+  act(() => {
+    window.dispatchEvent(event)
+  })
+  return prompt
+}
+
+beforeEach(() => {
+  stubDisplayMode(false)
+  stubUserAgent(ANDROID_UA)
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
+
+describe("InstallAppButton", () => {
+  it("stays hidden until the browser offers an install", async () => {
+    const { InstallAppButton } = await setup()
+    render(<InstallAppButton />)
+    expect(
+      screen.queryByRole("button", { name: "Instalar app" }),
+    ).not.toBeInTheDocument()
+  })
+
+  it("appears once Chrome fires beforeinstallprompt, and triggers it on click", async () => {
+    const { InstallAppButton } = await setup()
+    render(<InstallAppButton />)
+    const prompt = fireInstallPrompt()
+
+    const button = screen.getByRole("button", { name: "Instalar app" })
+    await userEvent.click(button)
+    expect(prompt).toHaveBeenCalledTimes(1)
+  })
+
+  it("disappears after the app is installed", async () => {
+    const { InstallAppButton } = await setup()
+    render(<InstallAppButton />)
+    fireInstallPrompt()
+    expect(screen.getByRole("button", { name: "Instalar app" })).toBeInTheDocument()
+
+    act(() => {
+      window.dispatchEvent(new Event("appinstalled"))
+    })
+    expect(
+      screen.queryByRole("button", { name: "Instalar app" }),
+    ).not.toBeInTheDocument()
+  })
+
+  it("renders nothing when already running from the home screen", async () => {
+    stubDisplayMode(true)
+    const { InstallAppButton } = await setup()
+    render(<InstallAppButton />)
+    expect(
+      screen.queryByRole("button", { name: "Instalar app" }),
+    ).not.toBeInTheDocument()
+  })
+
+  it("shows Share-sheet instructions on iOS Safari, which never fires the event", async () => {
+    stubUserAgent(IOS_UA)
+    const { InstallAppButton } = await setup()
+    render(<InstallAppButton />)
+
+    await userEvent.click(screen.getByRole("button", { name: "Instalar app" }))
+    expect(await screen.findByText("Instalar en tu iPhone")).toBeInTheDocument()
+    expect(screen.getByText(/Compartir en la barra de Safari/)).toBeInTheDocument()
+  })
+
+  it("stays hidden in iOS Chrome, which cannot add to the home screen", async () => {
+    stubUserAgent(`${IOS_UA} CriOS/126.0`)
+    const { InstallAppButton } = await setup()
+    render(<InstallAppButton />)
+    expect(
+      screen.queryByRole("button", { name: "Instalar app" }),
+    ).not.toBeInTheDocument()
+  })
+})

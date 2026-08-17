@@ -35,6 +35,15 @@ export default tseslint.config(
     },
   },
   {
+    // The service worker runs off the main thread: `self`, `caches` and
+    // friends live in the ServiceWorkerGlobalScope, not window.
+    files: ["public/sw.js"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      globals: globals.serviceworker,
+    },
+  },
+  {
     // Files whose job is to co-export non-components: cva variant helpers
     // (ui kit), hook + provider pairs (contexts), and the lazy route
     // loader table. Fast-refresh boundaries don't apply to them.

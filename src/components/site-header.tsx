@@ -12,6 +12,7 @@ import { useTheme } from "next-themes"
 import { toast } from "sonner"
 
 import { BrandLogo, LogoMark } from "@/components/brand-logo"
+import { InstallAppButton } from "@/components/install-app-button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import {
@@ -160,6 +161,7 @@ export function SiteHeader() {
         </nav>
 
         <div className="ml-auto flex items-center gap-1">
+          <InstallAppButton />
           <UserMenu />
         </div>
       </div>

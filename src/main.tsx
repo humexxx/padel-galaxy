@@ -5,9 +5,13 @@ import { RouterProvider } from "react-router"
 import { ThemeProvider } from "@/components/theme-provider"
 import { AuthProvider } from "@/contexts/auth-context"
 import { Toaster } from "@/components/ui/sonner"
+import { initPwa } from "@/lib/pwa"
 import { router } from "@/router"
 
 import "./index.css"
+
+// Before render: Chrome fires `beforeinstallprompt` once, and early.
+initPwa()
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

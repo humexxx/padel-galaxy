@@ -98,8 +98,30 @@ export function subscribePozo(
   )
 }
 
+/**
+ * Drop keys whose value is `undefined`. Firestore rejects undefined as a
+ * field value ("Unsupported field value: undefined") rather than treating
+ * it as absent, so an optional field left unset — `groupId` on a pozo with
+ * no group — would fail the whole write.
+ *
+ * Shallow on purpose: `undefined` only ever shows up on Pozo's optional
+ * top-level fields, and walking `players`/`matches` on every save would
+ * cost more than it protects.
+ *
+ * Safe with `setDoc` (no merge) because that replaces the document: a
+ * dropped key means the field is genuinely removed, which is exactly what
+ * clearing a pozo's group should do.
+ */
+function stripUndefined<T extends object>(value: T): T {
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(value)) {
+    if (v !== undefined) out[k] = v
+  }
+  return out as T
+}
+
 export async function savePozo(pozo: Pozo): Promise<void> {
-  await setDoc(pozoDoc(pozo.id), pozo)
+  await setDoc(pozoDoc(pozo.id), stripUndefined(pozo))
 }
 
 export async function patchPozo(id: string, patch: Partial<Pozo>): Promise<void> {

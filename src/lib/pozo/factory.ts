@@ -45,7 +45,10 @@ export function createPozo(input: {
   return {
     id: crypto.randomUUID(),
     ownerId: input.ownerId,
-    groupId: input.groupId,
+    // Spread rather than assign: Firestore rejects `undefined` as a field
+    // value outright, so an unpicked group has to leave the key off the
+    // document entirely, not write it as undefined. Group is optional.
+    ...(input.groupId ? { groupId: input.groupId } : {}),
     name: input.name.trim() || "Pozo sin nombre",
     createdAt: Date.now(),
     status: "draft",

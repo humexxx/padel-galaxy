@@ -155,3 +155,30 @@ describe("per-round clock — roundStartedAt / computeRoundEndsAt", () => {
     expect(computeRoundEndsAt(legacy)).toBeNull()
   })
 })
+
+describe("createPozo — optional groupId", () => {
+  it("omits the groupId key entirely when no group is picked", () => {
+    const pozo = createPozo({
+      name: "T",
+      ownerId: "o",
+      players: PLAYERS,
+      config: makeConfig(),
+    })
+    // Not just `undefined` — the key must be absent. Firestore rejects
+    // `undefined` as a field value, so setDoc() would throw on the whole
+    // document and the pozo would never get created.
+    expect("groupId" in pozo).toBe(false)
+    expect(Object.values(pozo).every((v) => v !== undefined)).toBe(true)
+  })
+
+  it("keeps the groupId when one is picked", () => {
+    const pozo = createPozo({
+      name: "T",
+      ownerId: "o",
+      players: PLAYERS,
+      config: makeConfig(),
+      groupId: "g1",
+    })
+    expect(pozo.groupId).toBe("g1")
+  })
+})

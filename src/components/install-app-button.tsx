@@ -10,13 +10,27 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { promptInstall, useInstallState } from "@/lib/pwa"
+import { cn } from "@/lib/utils"
+
+type Props = {
+  /**
+   * The landing page paints its own hardcoded light palette instead of the
+   * app's theme tokens, so it passes matching zinc classes rather than
+   * inheriting the ghost variant's foreground/accent colours.
+   */
+  className?: string
+}
 
 /**
- * "Instalar app" affordance in the header. Renders nothing unless the
- * browser can actually install (or is iOS Safari, where the user has to do
- * it by hand through the Share sheet).
+ * "Instalar app" affordance. Renders nothing unless the browser can actually
+ * install (or is iOS Safari, where the user has to do it by hand through the
+ * Share sheet).
+ *
+ * Lives in both headers on purpose: `beforeinstallprompt` is suppressed by
+ * `initPwa`, so this button is the only in-page way to install — and most
+ * people meet the app logged out, on the landing.
  */
-export function InstallAppButton() {
+export function InstallAppButton({ className }: Props) {
   const state = useInstallState()
   const [showIosHelp, setShowIosHelp] = React.useState(false)
 
@@ -33,7 +47,7 @@ export function InstallAppButton() {
           if (state === "ios") setShowIosHelp(true)
           else void promptInstall()
         }}
-        className="gap-1.5 px-2 sm:px-3"
+        className={cn("gap-1.5 px-2 sm:px-3", className)}
       >
         <DownloadIcon className="size-4" />
         <span className="hidden text-sm sm:inline">Instalar</span>

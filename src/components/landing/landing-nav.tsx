@@ -1,6 +1,8 @@
 import { Link } from "react-router"
 import { ArrowRightIcon } from "lucide-react"
 
+import { InstallAppButton } from "@/components/install-app-button"
+
 const NAV_LINKS = [
   { label: "Producto", href: "#features" },
   { label: "Cómo funciona", href: "#how" },
@@ -37,13 +39,16 @@ export function LandingNav() {
             ))}
           </nav>
         </div>
-        <Link
-          to="/login"
-          className="inline-flex h-8 items-center justify-center gap-1 rounded-full bg-zinc-900 px-4 text-[13px] font-medium text-white transition hover:bg-zinc-800"
-        >
-          Ingresar
-          <ArrowRightIcon className="!size-3" />
-        </Link>
+        <div className="flex items-center gap-1.5">
+          <InstallAppButton className="h-8 rounded-full text-[13px] text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900" />
+          <Link
+            to="/login"
+            className="inline-flex h-8 items-center justify-center gap-1 rounded-full bg-zinc-900 px-4 text-[13px] font-medium text-white transition hover:bg-zinc-800"
+          >
+            Ingresar
+            <ArrowRightIcon className="!size-3" />
+          </Link>
+        </div>
       </div>
     </header>
   )

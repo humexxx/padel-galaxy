@@ -37,6 +37,7 @@ import { PageContainer } from "@/components/page-container"
 import { PozoCard } from "@/components/pozo/pozo-card"
 import { useAuth } from "@/contexts/auth-context"
 import { useGroups } from "@/hooks/use-groups"
+import { useLinkedUidsSync } from "@/hooks/use-linked-uids-sync"
 import { usePozos } from "@/hooks/use-pozos"
 import { db } from "@/lib/firebase"
 import { createGroup, findGroupByName, type GroupRecord } from "@/lib/groups"
@@ -48,6 +49,9 @@ type Tab = "pozos" | "grupos"
 export function PozosPage() {
   const { pozos, hydrated, remove } = usePozos()
   const { isAdmin } = useAuth()
+  // Organizers land here after login, which makes it the reliable moment to
+  // repair pozos whose players linked their account after creation.
+  useLinkedUidsSync(pozos)
   const active = pozos.filter((p) => p.status !== "finished")
   const [tab, setTab] = React.useState<Tab>("pozos")
 

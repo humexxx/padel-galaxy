@@ -6,9 +6,10 @@ import { PozoTimer } from "./pozo-timer"
 
 vi.mock("@/lib/alarm", () => ({
   playTimerAlarm: vi.fn(),
+  primeTimerAlarm: vi.fn(),
 }))
 
-import { playTimerAlarm } from "@/lib/alarm"
+import { playTimerAlarm, primeTimerAlarm } from "@/lib/alarm"
 
 beforeEach(() => {
   vi.useFakeTimers()
@@ -76,6 +77,24 @@ describe("PozoTimer", () => {
       vi.advanceTimersByTime(2_000)
     })
     expect(playTimerAlarm).not.toHaveBeenCalled()
+  })
+
+  it("unlocks audio on the first interaction so iOS lets the beep through", () => {
+    render(<PozoTimer label="Partido" endsAt={Date.now() + 60_000} alarm />)
+    expect(primeTimerAlarm).not.toHaveBeenCalled()
+    act(() => {
+      window.dispatchEvent(new Event("pointerdown"))
+    })
+    expect(primeTimerAlarm).toHaveBeenCalled()
+  })
+
+  it("does not try to unlock audio when the alarm is muted", () => {
+    window.localStorage.setItem("pg.timer-alarm-enabled", "0")
+    render(<PozoTimer label="Partido" endsAt={Date.now() + 60_000} alarm />)
+    act(() => {
+      window.dispatchEvent(new Event("pointerdown"))
+    })
+    expect(primeTimerAlarm).not.toHaveBeenCalled()
   })
 
   it("renders no bell toggle when the alarm feature is off", () => {

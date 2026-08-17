@@ -36,6 +36,29 @@ function beep(at: number, durationSec: number, freq: number) {
   osc.stop(at + durationSec + 0.05)
 }
 
+/**
+ * Unlock the audio pipeline from inside a user gesture. The alarm itself
+ * fires from a timer callback — never a gesture — and iOS refuses to resume
+ * an AudioContext outside one, so without this the very first beep of a pozo
+ * is silently swallowed on iPhones. Cheap and idempotent: call it from any
+ * interaction.
+ */
+export function primeTimerAlarm(): void {
+  const audio = getContext()
+  if (!audio) return
+  if (audio.state === "suspended") void audio.resume()
+  try {
+    // iOS wants a node to have actually run inside the gesture before it
+    // treats the context as unlocked. One silent sample is enough.
+    const source = audio.createBufferSource()
+    source.buffer = audio.createBuffer(1, 1, audio.sampleRate)
+    source.connect(audio.destination)
+    source.start(0)
+  } catch {
+    // Nothing to recover — the visual "Tiempo terminado" state still works.
+  }
+}
+
 export function playTimerAlarm(): void {
   const audio = getContext()
   if (!audio) return

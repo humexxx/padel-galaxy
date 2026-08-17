@@ -3,7 +3,7 @@ import { motion } from "framer-motion"
 import { BellIcon, BellOffIcon } from "lucide-react"
 
 import { useNow } from "@/hooks/use-now"
-import { playTimerAlarm } from "@/lib/alarm"
+import { playTimerAlarm, primeTimerAlarm } from "@/lib/alarm"
 import { setTimerAlarmEnabled, useTimerAlarmEnabled } from "@/lib/preferences"
 import { cn } from "@/lib/utils"
 import { formatDuration } from "@/lib/time"
@@ -56,6 +56,21 @@ export function PozoTimer({
     }
   }, [alarm, alarmEnabled, remaining])
 
+  // The beep is scheduled from a timer callback, which iOS won't accept as a
+  // reason to start audio. Piggyback on the first touch anywhere on the page
+  // to open the context while a gesture is still on the stack.
+  React.useEffect(() => {
+    if (!alarm || !alarmEnabled) return
+    const unlock = () => primeTimerAlarm()
+    const opts = { once: true, passive: true } as const
+    window.addEventListener("pointerdown", unlock, opts)
+    window.addEventListener("keydown", unlock, opts)
+    return () => {
+      window.removeEventListener("pointerdown", unlock)
+      window.removeEventListener("keydown", unlock)
+    }
+  }, [alarm, alarmEnabled])
+
   return (
     <motion.div
       layout
@@ -77,7 +92,12 @@ export function PozoTimer({
       {alarm && (
         <button
           type="button"
-          onClick={() => setTimerAlarmEnabled(!alarmEnabled)}
+          onClick={() => {
+            // Turning the bell back on is itself a gesture — the best moment
+            // to unlock audio, and it doubles as a "did that work?" test.
+            if (!alarmEnabled) primeTimerAlarm()
+            setTimerAlarmEnabled(!alarmEnabled)
+          }}
           aria-label={alarmEnabled ? "Silenciar alarma" : "Activar alarma"}
           title={
             alarmEnabled

@@ -14,6 +14,15 @@
     ],
     "headers": [
       {
+        "source": "**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
+      },
+      {
         "source": "/assets/**",
         "headers": [
           {
@@ -23,29 +32,11 @@
         ]
       },
       {
-        "source": "/sw.js",
+        "source": "**/*.@(png|jpg|jpeg|svg|webp|ico|woff2)",
         "headers": [
           {
             "key": "Cache-Control",
-            "value": "no-cache"
-          }
-        ]
-      },
-      {
-        "source": "/manifest.webmanifest",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "no-cache"
-          }
-        ]
-      },
-      {
-        "source": "/index.html",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "no-cache"
+            "value": "public, max-age=86400, must-revalidate"
           }
         ]
       }

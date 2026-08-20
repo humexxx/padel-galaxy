@@ -1,9 +1,16 @@
 import * as React from "react"
 import { motion } from "framer-motion"
-import { BellIcon, BellOffIcon } from "lucide-react"
+import { BellIcon, BellOffIcon, BellRingIcon } from "lucide-react"
 
+import { Button } from "@/components/ui/button"
 import { useNow } from "@/hooks/use-now"
-import { playTimerAlarm, primeTimerAlarm } from "@/lib/alarm"
+import {
+  isTimerAlarmRinging,
+  primeTimerAlarm,
+  startTimerAlarm,
+  stopTimerAlarm,
+  subscribeTimerAlarm,
+} from "@/lib/alarm"
 import { setTimerAlarmEnabled, useTimerAlarmEnabled } from "@/lib/preferences"
 import { cn } from "@/lib/utils"
 import { formatDuration } from "@/lib/time"
@@ -18,9 +25,10 @@ type Props = {
   /** Secondary countdown pinned to the card's top-right corner — used for
    * the whole-pozo clock while the main digits track the current match. */
   secondary?: { label: string; endsAt: number }
-  /** Beep (+ vibrate) when the main countdown hits zero. Renders a bell
-   * toggle in the top-left corner so it can be muted from this screen;
-   * the preference persists per-device in localStorage. */
+  /** Beep (+ vibrate) when the main countdown hits zero, and keep beeping
+   * until it's dealt with. Renders a bell toggle in the top-left corner so
+   * the feature can be muted from this screen; the preference persists
+   * per-device in localStorage. */
   alarm?: boolean
 }
 
@@ -44,6 +52,12 @@ export function PozoTimer({
   const isLarge = size === "large"
 
   const alarmEnabled = useTimerAlarmEnabled()
+  const ringing = React.useSyncExternalStore(
+    subscribeTimerAlarm,
+    isTimerAlarmRinging,
+    () => false,
+  )
+
   // Fire only on the transition >0 → 0 while mounted. Initializing the ref
   // with the current remaining means a timer that mounts already expired
   // (e.g. reopening a stale pozo) stays silent.
@@ -52,9 +66,25 @@ export function PozoTimer({
     const prev = prevRemaining.current
     prevRemaining.current = remaining
     if (alarm && alarmEnabled && prev > 0 && remaining === 0) {
-      playTimerAlarm()
+      startTimerAlarm()
     }
   }, [alarm, alarmEnabled, remaining])
+
+  // Moving on IS the dismissal: "Empezar a jugar" and each round change push
+  // endsAt into the future, so the clock leaving zero silences the alarm
+  // without anyone having to hunt for a stop button.
+  React.useEffect(() => {
+    if (remaining > 0) stopTimerAlarm()
+  }, [remaining])
+
+  // Muting the bell mid-ring should shut it up now, not just next time.
+  React.useEffect(() => {
+    if (!alarmEnabled) stopTimerAlarm()
+  }, [alarmEnabled])
+
+  // Leaving the pozo (finish, navigate away) must not leave it ringing into
+  // an unmounted tree — nothing would be left to stop it.
+  React.useEffect(() => () => stopTimerAlarm(), [])
 
   // The beep is scheduled from a timer callback, which iOS won't accept as a
   // reason to start audio. Piggyback on the first touch anywhere on the page
@@ -149,6 +179,18 @@ export function PozoTimer({
       <p className="mt-2 text-xs text-muted-foreground">
         {ended ? "Tiempo terminado" : "Tiempo restante"}
       </p>
+      {ringing && (
+        <Button
+          type="button"
+          variant="destructive"
+          onClick={stopTimerAlarm}
+          // Thumb-sized: this gets tapped in a hurry, on a phone, courtside.
+          className="mt-4 h-11 w-full gap-2 sm:w-auto sm:px-8"
+        >
+          <BellRingIcon className="size-4 animate-pulse" />
+          Detener alarma
+        </Button>
+      )}
     </motion.div>
   )
 }

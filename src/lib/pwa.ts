@@ -18,13 +18,29 @@ type BeforeInstallPromptEvent = Event & {
 }
 
 /**
- * - `prompt`   — Chrome handed us an install event, show a button.
- * - `ios`      — iOS Safari never fires that event; installing is a manual
- *                Share → "Agregar a inicio", so we show instructions instead.
- * - `installed`— already running from the home screen, nothing to offer.
- * - `hidden`   — browser can't install (iOS Chrome/Firefox, older desktops).
+ * Every state except `installed` and `hidden` must lead somewhere. Hiding the
+ * entry point whenever we couldn't offer a one-tap install left users staring
+ * at a menu with no install option and no explanation — the single most
+ * common way this feature failed in practice.
+ *
+ * - `prompt`    — Chrome handed us an install event: one tap, done.
+ * - `ios`       — iOS Safari never fires that event; walk them through
+ *                 Share → "Agregar a inicio".
+ * - `ios-other` — iOS, but Chrome/Firefox/Edge. iOS only lets Safari add to
+ *                 the home screen, so the path is "reopen this in Safari".
+ * - `manual`    — a Chromium browser that didn't give us an event. Usually
+ *                 already installed, or the user dismissed the prompt once
+ *                 and Chrome is suppressing it. Point at the browser menu.
+ * - `installed` — already running from the home screen, nothing to offer.
+ * - `hidden`    — genuinely nothing to say (e.g. desktop Firefox).
  */
-export type InstallState = "prompt" | "ios" | "installed" | "hidden"
+export type InstallState =
+  | "prompt"
+  | "ios"
+  | "ios-other"
+  | "manual"
+  | "installed"
+  | "hidden"
 
 let deferredPrompt: BeforeInstallPromptEvent | null = null
 let didInstall = false
@@ -43,23 +59,34 @@ function isStandalone(): boolean {
   )
 }
 
-function isIOSSafari(): boolean {
+function isIOS(): boolean {
   if (typeof navigator === "undefined") return false
-  const ua = navigator.userAgent
-  const isIOS =
-    /iPad|iPhone|iPod/.test(ua) ||
+  return (
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
     // iPadOS 13+ reports itself as a Mac; the touch points give it away.
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
-  if (!isIOS) return false
-  // Chrome/Firefox/Edge on iOS wrap WebKit but cannot add to the home
-  // screen, so pointing their users at the Share sheet would be a lie.
-  return !/CriOS|FxiOS|EdgiOS|OPiOS/.test(ua)
+  )
+}
+
+/**
+ * Chrome/Firefox/Edge on iOS wrap WebKit but cannot add to the home screen —
+ * iOS reserves that for Safari — so they need different instructions, not the
+ * Share-sheet ones.
+ */
+function isIOSSafari(): boolean {
+  return isIOS() && !/CriOS|FxiOS|EdgiOS|OPiOS/.test(navigator.userAgent)
 }
 
 function snapshot(): InstallState {
   if (didInstall || isStandalone()) return "installed"
   if (deferredPrompt) return "prompt"
-  if (isIOSSafari()) return "ios"
+  if (isIOS()) return isIOSSafari() ? "ios" : "ios-other"
+  // Chromium exposes the event type even when it has no event for us right
+  // now — enough to know the browser CAN install, so we can point at its own
+  // menu instead of going silent.
+  if (typeof window !== "undefined" && "onbeforeinstallprompt" in window) {
+    return "manual"
+  }
   return "hidden"
 }
 

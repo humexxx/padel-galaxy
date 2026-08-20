@@ -13,7 +13,7 @@ import { useTheme } from "next-themes"
 import { toast } from "sonner"
 
 import { BrandLogo, LogoMark } from "@/components/brand-logo"
-import { InstallAppButton, IosInstructions } from "@/components/install-app"
+import { InstallAppButton, InstallInstructions } from "@/components/install-app"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import {
@@ -282,7 +282,8 @@ function UserMenu() {
           {versionLabel}
         </p>
       </DropdownMenuContent>
-      <IosInstructions
+      <InstallInstructions
+        state={install.state}
         open={install.showIosHelp}
         onOpenChange={install.setShowIosHelp}
       />

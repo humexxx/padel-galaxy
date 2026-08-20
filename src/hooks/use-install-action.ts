@@ -10,8 +10,10 @@ import { promptInstall, useInstallState, type InstallState } from "@/lib/pwa"
 export function useInstallAction(state: InstallState) {
   const [showIosHelp, setShowIosHelp] = React.useState(false)
   const trigger = React.useCallback(() => {
-    if (state === "ios") setShowIosHelp(true)
-    else void promptInstall()
+    // Only "prompt" has a real native dialog to fire; everything else needs
+    // the instructions panel.
+    if (state === "prompt") void promptInstall()
+    else setShowIosHelp(true)
   }, [state])
   return { trigger, showIosHelp, setShowIosHelp }
 }
@@ -24,5 +26,8 @@ export function useInstallAction(state: InstallState) {
 export function useInstallMenuEntry() {
   const state = useInstallState()
   const action = useInstallAction(state)
-  return { ...action, available: state === "prompt" || state === "ios" }
+  // Anything short of "already installed" gets an entry. A menu with no
+  // install option and no explanation is the failure mode this exists to
+  // prevent.
+  return { ...action, state, available: state !== "installed" && state !== "hidden" }
 }

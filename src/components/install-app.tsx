@@ -1,10 +1,14 @@
 import * as React from "react"
 import {
+  CompassIcon,
+  CopyIcon,
   DownloadIcon,
+  MoreVerticalIcon,
   PlusSquareIcon,
   ShareIcon,
   XIcon,
 } from "lucide-react"
+import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -19,7 +23,7 @@ import {
   setInstallBannerDismissed,
   useInstallBannerDismissed,
 } from "@/lib/preferences"
-import { useInstallState } from "@/lib/pwa"
+import { useInstallState, type InstallState } from "@/lib/pwa"
 import { cn } from "@/lib/utils"
 
 function Step({ n, children }: { n: number; children: React.ReactNode }) {
@@ -33,35 +37,129 @@ function Step({ n, children }: { n: number; children: React.ReactNode }) {
   )
 }
 
-export function IosInstructions({
+/**
+ * Best-effort jump to Safari. `x-safari-https:` is an undocumented scheme
+ * Chrome on iOS hands off to the system, which routes it to Safari. Apple
+ * publishes no supported way to do this, so it may silently do nothing —
+ * which is why the dialog stays open behind it with the copy-link fallback
+ * still on screen.
+ */
+function openInSafari() {
+  const { host, pathname, search } = window.location
+  window.location.href = `x-safari-https://${host}${pathname}${search}`
+}
+
+async function copyAppUrl() {
+  try {
+    await navigator.clipboard.writeText(window.location.origin)
+    toast.success("Link copiado — pegalo en Safari")
+  } catch {
+    toast.error("No se pudo copiar. El link es " + window.location.host)
+  }
+}
+
+/**
+ * Whatever the browser can't do for the user, spell out. Every state that
+ * isn't a one-tap install lands here rather than showing nothing.
+ */
+export function InstallInstructions({
+  state,
   open,
   onOpenChange,
 }: {
+  state: InstallState
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Instalar en tu iPhone</DialogTitle>
-          <DialogDescription>
-            Safari no tiene un botón automático, pero son dos toques.
-          </DialogDescription>
-        </DialogHeader>
-        <ol className="space-y-3 text-sm">
-          <Step n={1}>
-            Tocá <ShareIcon className="size-4 shrink-0" /> Compartir en la barra
-            de Safari.
-          </Step>
-          <Step n={2}>
-            Elegí <PlusSquareIcon className="size-4 shrink-0" /> Agregar a
-            inicio.
-          </Step>
-          <Step n={3}>
-            <span>Confirmá con Agregar. Listo, queda como una app más.</span>
-          </Step>
-        </ol>
+        {state === "ios" && (
+          <>
+            <DialogHeader>
+              <DialogTitle>Instalar en tu iPhone</DialogTitle>
+              <DialogDescription>
+                Safari no tiene un botón automático, pero son dos toques.
+              </DialogDescription>
+            </DialogHeader>
+            <ol className="space-y-3 text-sm">
+              <Step n={1}>
+                Tocá <ShareIcon className="size-4 shrink-0" /> Compartir en la
+                barra de Safari.
+              </Step>
+              <Step n={2}>
+                Elegí <PlusSquareIcon className="size-4 shrink-0" /> Agregar a
+                inicio.
+              </Step>
+              <Step n={3}>
+                <span>Confirmá con Agregar. Listo, queda como una app más.</span>
+              </Step>
+            </ol>
+          </>
+        )}
+
+        {state === "ios-other" && (
+          <>
+            <DialogHeader>
+              <DialogTitle>Abrila en Safari para instalarla</DialogTitle>
+              <DialogDescription>
+                iOS solo le permite a Safari agregar apps a la pantalla de
+                inicio. No es un límite de Padel Galaxy: ningún navegador puede
+                hacerlo en iPhone.
+              </DialogDescription>
+            </DialogHeader>
+            <ol className="space-y-3 text-sm">
+              <Step n={1}>Abrí este mismo link en Safari.</Step>
+              <Step n={2}>
+                Ahí tocá <ShareIcon className="size-4 shrink-0" /> Compartir →{" "}
+                <PlusSquareIcon className="size-4 shrink-0" /> Agregar a inicio.
+              </Step>
+            </ol>
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+              <Button onClick={openInSafari} className="gap-2">
+                <CompassIcon className="size-4" />
+                Abrir en Safari
+              </Button>
+              <Button variant="outline" onClick={copyAppUrl} className="gap-2">
+                <CopyIcon className="size-4" />
+                Copiar el link
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Si el botón no hace nada, copiá el link y pegalo en Safari a
+              mano — iOS no le da a los navegadores una forma oficial de
+              abrirse entre sí.
+            </p>
+          </>
+        )}
+
+        {state === "manual" && (
+          <>
+            <DialogHeader>
+              <DialogTitle>Instalar desde el menú del navegador</DialogTitle>
+              <DialogDescription>
+                Tu navegador no nos dio el diálogo de instalación. Suele pasar
+                si ya la tenés instalada, o si cerraste el cartel de instalar
+                alguna vez — Chrome deja de ofrecerlo por un tiempo.
+              </DialogDescription>
+            </DialogHeader>
+            <ol className="space-y-3 text-sm">
+              <Step n={1}>
+                Abrí el menú <MoreVerticalIcon className="size-4 shrink-0" /> del
+                navegador.
+              </Step>
+              <Step n={2}>
+                <span>Elegí "Instalar aplicación" o "Agregar a pantalla principal".</span>
+              </Step>
+              <Step n={3}>
+                <span>
+                  Si no aparece, fijate en tu pantalla de inicio: puede que ya
+                  esté instalada.
+                </span>
+              </Step>
+            </ol>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   )
@@ -100,7 +198,11 @@ export function InstallAppButton({ className }: ButtonProps) {
         <DownloadIcon className="size-4" />
         <span className="hidden text-sm sm:inline">Instalar</span>
       </Button>
-      <IosInstructions open={showIosHelp} onOpenChange={setShowIosHelp} />
+      <InstallInstructions
+        state={state}
+        open={showIosHelp}
+        onOpenChange={setShowIosHelp}
+      />
     </>
   )
 }
@@ -120,7 +222,10 @@ export function InstallAppBanner() {
   const dismissed = useInstallBannerDismissed()
   const { trigger, showIosHelp, setShowIosHelp } = useInstallAction(state)
 
-  if (dismissed || state === "installed" || state === "hidden") return null
+  // "manual" usually means already-installed; nagging there would be noise.
+  // The user-menu entry still covers it.
+  const actionable = state === "prompt" || state === "ios" || state === "ios-other"
+  if (dismissed || !actionable) return null
 
   return (
     <>
@@ -154,7 +259,11 @@ export function InstallAppBanner() {
           <XIcon className="size-4" />
         </button>
       </div>
-      <IosInstructions open={showIosHelp} onOpenChange={setShowIosHelp} />
+      <InstallInstructions
+        state={state}
+        open={showIosHelp}
+        onOpenChange={setShowIosHelp}
+      />
     </>
   )
 }

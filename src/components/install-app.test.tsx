@@ -111,13 +111,31 @@ describe("InstallAppButton", () => {
     expect(screen.getByText(/Compartir en la barra de Safari/)).toBeInTheDocument()
   })
 
-  it("stays hidden in iOS Chrome, which cannot add to the home screen", async () => {
+  it("sends iOS Chrome to Safari instead of leaving a dead end", async () => {
+    // Chrome on iOS genuinely cannot add to the home screen, but going
+    // silent left users with no option and no explanation.
     stubUserAgent(`${IOS_UA} CriOS/126.0`)
     const { InstallAppButton } = await setup()
     render(<InstallAppButton />)
+
+    await userEvent.click(screen.getByRole("button", { name: "Instalar app" }))
     expect(
-      screen.queryByRole("button", { name: "Instalar app" }),
-    ).not.toBeInTheDocument()
+      await screen.findByText("Abrila en Safari para instalarla"),
+    ).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /Copiar el link/ })).toBeInTheDocument()
+  })
+
+  it("explains the browser menu when Chromium gives us no prompt", async () => {
+    // e.g. already installed, or the user dismissed the prompt once and
+    // Chrome is suppressing it for months.
+    vi.stubGlobal("onbeforeinstallprompt", null)
+    const { InstallAppButton } = await setup()
+    render(<InstallAppButton />)
+
+    await userEvent.click(screen.getByRole("button", { name: "Instalar app" }))
+    expect(
+      await screen.findByText("Instalar desde el menú del navegador"),
+    ).toBeInTheDocument()
   })
 })
 

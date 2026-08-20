@@ -30,6 +30,7 @@ import { useInstallMenuEntry } from "@/hooks/use-install-action"
 import { useMyPlayer } from "@/hooks/use-players"
 import { usePozos } from "@/hooks/use-pozos"
 import { cn } from "@/lib/utils"
+import { versionDetail, versionLabel } from "@/lib/version"
 
 type NavItem = {
   label: string
@@ -270,6 +271,16 @@ function UserMenu() {
           <LogOutIcon className="size-4" />
           Cerrar sesión
         </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {/* Not a menu item: it's a label, nothing happens when you click it.
+            Lives here so "which build am I on?" is answerable from any page
+            without digging into settings. */}
+        <p
+          className="px-2 py-1.5 text-center font-mono text-[10px] text-muted-foreground"
+          title={versionDetail()}
+        >
+          {versionLabel}
+        </p>
       </DropdownMenuContent>
       <IosInstructions
         open={install.showIosHelp}

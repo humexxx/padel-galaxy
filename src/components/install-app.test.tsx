@@ -32,9 +32,9 @@ function stubDisplayMode(standalone: boolean) {
 async function setup() {
   vi.resetModules()
   const pwa = await import("@/lib/pwa")
-  const { InstallAppButton } = await import("@/components/install-app-button")
+  const mod = await import("@/components/install-app")
   pwa.initPwa()
-  return { InstallAppButton }
+  return mod
 }
 
 /** Stand-in for Chrome's non-standard BeforeInstallPromptEvent. */
@@ -118,5 +118,63 @@ describe("InstallAppButton", () => {
     expect(
       screen.queryByRole("button", { name: "Instalar app" }),
     ).not.toBeInTheDocument()
+  })
+})
+
+describe("InstallAppBanner", () => {
+  beforeEach(() => {
+    window.localStorage.clear()
+  })
+
+  it("invites the user once the browser says it can install", async () => {
+    const { InstallAppBanner } = await setup()
+    render(<InstallAppBanner />)
+    expect(screen.queryByText("Instalá Padel Galaxy")).not.toBeInTheDocument()
+
+    fireInstallPrompt()
+    expect(screen.getByText("Instalá Padel Galaxy")).toBeInTheDocument()
+  })
+
+  it("triggers the native prompt from its Instalar button", async () => {
+    const { InstallAppBanner } = await setup()
+    render(<InstallAppBanner />)
+    const prompt = fireInstallPrompt()
+
+    await userEvent.click(screen.getByRole("button", { name: "Instalar" }))
+    expect(prompt).toHaveBeenCalledTimes(1)
+  })
+
+  it("stays gone once dismissed, and remembers across reloads", async () => {
+    const { InstallAppBanner } = await setup()
+    const { unmount } = render(<InstallAppBanner />)
+    fireInstallPrompt()
+
+    await userEvent.click(screen.getByRole("button", { name: "No mostrar más" }))
+    expect(screen.queryByText("Instalá Padel Galaxy")).not.toBeInTheDocument()
+    expect(window.localStorage.getItem("pg.install-banner-dismissed")).toBe("1")
+
+    // A fresh mount is the same thing a page reload does.
+    unmount()
+    const again = await setup()
+    render(<again.InstallAppBanner />)
+    fireInstallPrompt()
+    expect(screen.queryByText("Instalá Padel Galaxy")).not.toBeInTheDocument()
+  })
+
+  it("shows Share-sheet steps on iOS instead of a prompt that does not exist", async () => {
+    stubUserAgent(IOS_UA)
+    const { InstallAppBanner } = await setup()
+    render(<InstallAppBanner />)
+
+    await userEvent.click(screen.getByRole("button", { name: "Instalar" }))
+    expect(await screen.findByText("Instalar en tu iPhone")).toBeInTheDocument()
+  })
+
+  it("renders nothing when the app is already installed", async () => {
+    stubDisplayMode(true)
+    const { InstallAppBanner } = await setup()
+    render(<InstallAppBanner />)
+    fireInstallPrompt()
+    expect(screen.queryByText("Instalá Padel Galaxy")).not.toBeInTheDocument()
   })
 })

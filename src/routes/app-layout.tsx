@@ -1,5 +1,6 @@
 import { Outlet, useLocation } from "react-router"
 
+import { InstallAppBanner } from "@/components/install-app"
 import { PageTransition } from "@/components/page-transition"
 import { SiteHeader } from "@/components/site-header"
 import { StarsBackground } from "@/components/stars-background"
@@ -14,6 +15,7 @@ export function AppLayout() {
           <Outlet />
         </PageTransition>
       </main>
+      <InstallAppBanner />
     </StarsBackground>
   )
 }

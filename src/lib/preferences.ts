@@ -44,3 +44,13 @@ export const useShootingStarsEnabled = shootingStars.usePref
 const timerAlarm = createBoolPref("pg.timer-alarm-enabled", true)
 export const setTimerAlarmEnabled = timerAlarm.set
 export const useTimerAlarmEnabled = timerAlarm.usePref
+
+/**
+ * Whether the user has waved away the mobile install banner. Sticky by
+ * design: an install promotion that reappears after being dismissed is the
+ * exact pattern the Chrome team calls out as harmful. The user menu keeps a
+ * permanent "Instalar app" entry for anyone who changes their mind.
+ */
+const installBannerDismissed = createBoolPref("pg.install-banner-dismissed", false)
+export const setInstallBannerDismissed = installBannerDismissed.set
+export const useInstallBannerDismissed = installBannerDismissed.usePref

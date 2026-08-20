@@ -2,6 +2,7 @@ import * as React from "react"
 import { Link, useLocation, useNavigate } from "react-router"
 import {
   ChevronsUpDownIcon,
+  DownloadIcon,
   LogOutIcon,
   MonitorIcon,
   MoonIcon,
@@ -12,7 +13,7 @@ import { useTheme } from "next-themes"
 import { toast } from "sonner"
 
 import { BrandLogo, LogoMark } from "@/components/brand-logo"
-import { InstallAppButton } from "@/components/install-app-button"
+import { InstallAppButton, IosInstructions } from "@/components/install-app"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import {
@@ -25,6 +26,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useAuth } from "@/contexts/auth-context"
+import { useInstallMenuEntry } from "@/hooks/use-install-action"
 import { useMyPlayer } from "@/hooks/use-players"
 import { usePozos } from "@/hooks/use-pozos"
 import { cn } from "@/lib/utils"
@@ -161,7 +163,7 @@ export function SiteHeader() {
         </nav>
 
         <div className="ml-auto flex items-center gap-1">
-          <InstallAppButton />
+          <InstallAppButton className="hidden sm:inline-flex" />
           <UserMenu />
         </div>
       </div>
@@ -178,6 +180,10 @@ function UserMenu() {
   // runs unconditionally (Rules of Hooks — never bail out before a hook).
   const name = user?.displayName || user?.email?.split("@")[0] || "Cuenta"
   const initials = React.useMemo(() => initialsFrom(name), [name])
+  // Permanent home for the install action. On phones the header button is
+  // hidden and the banner can be dismissed for good, so without this entry
+  // there'd be no way back to installing.
+  const install = useInstallMenuEntry()
 
   if (!user) return null
 
@@ -231,6 +237,12 @@ function UserMenu() {
             <SettingsIcon className="size-4" />
             Configuración
           </DropdownMenuItem>
+          {install.available && (
+            <DropdownMenuItem onClick={install.trigger}>
+              <DownloadIcon className="size-4" />
+              Instalar app
+            </DropdownMenuItem>
+          )}
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
@@ -259,6 +271,10 @@ function UserMenu() {
           Cerrar sesión
         </DropdownMenuItem>
       </DropdownMenuContent>
+      <IosInstructions
+        open={install.showIosHelp}
+        onOpenChange={install.setShowIosHelp}
+      />
     </DropdownMenu>
   )
 }

@@ -1,7 +1,7 @@
 import { Link } from "react-router"
 import { ArrowRightIcon } from "lucide-react"
 
-import { InstallAppButton } from "@/components/install-app-button"
+import { InstallAppButton } from "@/components/install-app"
 
 const NAV_LINKS = [
   { label: "Producto", href: "#features" },

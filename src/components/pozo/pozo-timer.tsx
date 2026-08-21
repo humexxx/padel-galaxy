@@ -145,7 +145,7 @@ export function PozoTimer({
       )}
       {secondary && (
         <div className="absolute top-2.5 right-2.5 rounded-lg bg-background/60 px-2.5 py-1.5 text-right backdrop-blur-sm">
-          <p className="text-[9px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
             {secondary.label}
           </p>
           <p className="font-mono text-sm font-semibold tabular-nums text-foreground/80">

@@ -281,7 +281,9 @@ function ScoreInput({
       max={99}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="h-10 w-14 text-center text-lg font-semibold tabular-nums"
+      // Score entry is the highest-traffic control in a pozo and gets
+      // tapped in a hurry — 44px tall clears Apple's minimum.
+      className="h-11 w-14 text-center text-lg font-semibold tabular-nums"
       {...rest}
     />
   )
@@ -289,7 +291,7 @@ function ScoreInput({
 
 function ScoreDisplay({ value }: { value: number | null }) {
   return (
-    <span className="inline-flex h-10 w-14 items-center justify-center rounded-md bg-muted text-xl font-semibold tabular-nums">
+    <span className="inline-flex h-11 w-14 items-center justify-center rounded-md bg-muted text-xl font-semibold tabular-nums">
       {value ?? "–"}
     </span>
   )

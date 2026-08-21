@@ -263,6 +263,9 @@ export function PozoView({ pozo, onUpdate }: Props) {
               onClick={() => setViewedRound((r) => Math.max(0, r - 1))}
               disabled={safeViewed === 0}
               aria-label="Ronda anterior"
+              // Tapped mid-pozo, courtside, often one-handed: 44px is
+              // Apple's minimum and the icon-size default (32px) missed it.
+              className="size-11 sm:size-9"
             >
               <ChevronLeftIcon className="size-4" />
             </Button>
@@ -287,6 +290,9 @@ export function PozoView({ pozo, onUpdate }: Props) {
               onClick={() => setViewedRound((r) => Math.min(pozo.currentRound, r + 1))}
               disabled={safeViewed >= pozo.currentRound}
               aria-label="Ronda siguiente"
+              // Tapped mid-pozo, courtside, often one-handed: 44px is
+              // Apple's minimum and the icon-size default (32px) missed it.
+              className="size-11 sm:size-9"
             >
               <ChevronRightIcon className="size-4" />
             </Button>

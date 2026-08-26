@@ -597,6 +597,152 @@ describe("/groups/{id}", () => {
 // player-claim hasOnly, size caps. Added after the security audit.
 // ============================================================================
 
+// ============================================================================
+// /classes
+// ============================================================================
+
+describe("/classes/{id}", () => {
+  // Classes are an admin-tier tool, so the fixture is owned by the admin
+  // context rather than the plain OWNER used by the other collections.
+  const clase = {
+    id: "cl1",
+    ownerId: ADMIN,
+    startsAt: 1_800_000_000_000,
+    durationMin: 60,
+    students: [{ id: "pl1", name: "Juan" }],
+    packageId: "pkg1",
+    packageType: "pack5",
+    sessionIndex: 2,
+    sessionCount: 5,
+    status: "scheduled",
+    location: null,
+    notes: null,
+    createdAt: 0,
+    updatedAt: 0,
+  }
+
+  describe("create", () => {
+    it("allows an admin to create a class they own", async () => {
+      await assertSucceeds(setDoc(doc(admin(), "classes/cl1"), clase))
+    })
+
+    it("denies a non-admin, even for a class they'd own", async () => {
+      await assertFails(
+        setDoc(doc(owner(), "classes/cl1"), { ...clase, ownerId: OWNER }),
+      )
+    })
+
+    it("denies an admin from creating a class owned by someone else", async () => {
+      await assertFails(
+        setDoc(doc(admin(), "classes/cl1"), { ...clase, ownerId: OTHER }),
+      )
+    })
+
+    it("denies a class with no students or more than four", async () => {
+      await assertFails(
+        setDoc(doc(admin(), "classes/cl1"), { ...clase, students: [] }),
+      )
+      await assertFails(
+        setDoc(doc(admin(), "classes/cl1"), {
+          ...clase,
+          students: Array.from({ length: 5 }, (_, i) => ({
+            id: `pl${i}`,
+            name: `Alumno ${i}`,
+          })),
+        }),
+      )
+    })
+
+    it("denies an unknown status or a nonsensical duration", async () => {
+      await assertFails(
+        setDoc(doc(admin(), "classes/cl1"), { ...clase, status: "paid" }),
+      )
+      await assertFails(
+        setDoc(doc(admin(), "classes/cl1"), { ...clase, durationMin: 0 }),
+      )
+    })
+
+    it("denies unauthenticated create", async () => {
+      await assertFails(setDoc(doc(anon(), "classes/cl1"), clase))
+    })
+  })
+
+  describe("read", () => {
+    beforeEach(() => seed("classes/cl1", clase))
+
+    it("allows any admin to read", async () => {
+      await assertSucceeds(getDoc(doc(admin(), "classes/cl1")))
+    })
+
+    it("allows a demoted owner to still read their own class", async () => {
+      await seed("classes/cl2", { ...clase, id: "cl2", ownerId: OWNER })
+      await assertSucceeds(getDoc(doc(owner(), "classes/cl2")))
+    })
+
+    it("denies a cliente reading someone else's class", async () => {
+      await assertFails(getDoc(doc(other(), "classes/cl1")))
+    })
+
+    it("denies unauthenticated reads", async () => {
+      await assertFails(getDoc(doc(anon(), "classes/cl1")))
+    })
+  })
+
+  describe("update", () => {
+    beforeEach(() => seed("classes/cl1", clase))
+
+    it("allows an admin to reschedule", async () => {
+      await assertSucceeds(
+        updateDoc(doc(admin(), "classes/cl1"), {
+          startsAt: 1_800_003_600_000,
+          status: "done",
+        }),
+      )
+    })
+
+    it("denies moving the class to another owner or package", async () => {
+      await assertFails(updateDoc(doc(admin(), "classes/cl1"), { ownerId: OTHER }))
+      await assertFails(
+        updateDoc(doc(admin(), "classes/cl1"), { packageId: "pkg2" }),
+      )
+    })
+
+    it("keeps the student cap on update", async () => {
+      await assertFails(
+        updateDoc(doc(admin(), "classes/cl1"), {
+          students: Array.from({ length: 5 }, (_, i) => ({
+            id: `pl${i}`,
+            name: `Alumno ${i}`,
+          })),
+        }),
+      )
+    })
+
+    it("denies a non-admin from updating", async () => {
+      await assertFails(
+        updateDoc(doc(other(), "classes/cl1"), { status: "cancelled" }),
+      )
+    })
+  })
+
+  describe("delete", () => {
+    beforeEach(() => seed("classes/cl1", clase))
+
+    it("allows an admin to delete", async () => {
+      await assertSucceeds(deleteDoc(doc(admin(), "classes/cl1")))
+    })
+
+    it("allows the owner to delete their own class", async () => {
+      await seed("classes/cl2", { ...clase, id: "cl2", ownerId: OWNER })
+      await assertSucceeds(deleteDoc(doc(owner(), "classes/cl2")))
+    })
+
+    it("denies anyone else from deleting", async () => {
+      await assertFails(deleteDoc(doc(other(), "classes/cl1")))
+    })
+  })
+})
+
 describe("security: email_verified gates", () => {
   it("rejects /users create with role='admin' when email is NOT verified", async () => {
     // Setup: there IS a matching invite, BUT the user's email isn't verified.

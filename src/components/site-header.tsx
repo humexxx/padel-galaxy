@@ -49,6 +49,36 @@ function initialsFrom(name: string): string {
   )
 }
 
+/**
+ * True while the horizontally-scrollable element still has content past its
+ * right edge. Drives the fade that tells you the nav strip keeps going —
+ * and stops fading once you've scrolled to the end, so the last item is
+ * never dimmed for no reason.
+ */
+function useHasScrollRight(
+  ref: React.RefObject<HTMLElement | null>,
+  /** Re-measures when the item count changes — the admin flags resolve
+   *  after the first paint, so the strip grows a beat late. */
+  itemCount: number,
+): boolean {
+  const [hasMore, setHasMore] = React.useState(false)
+  React.useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const check = () =>
+      setHasMore(el.scrollWidth - el.clientWidth - el.scrollLeft > 1)
+    check()
+    el.addEventListener("scroll", check, { passive: true })
+    const observer = new ResizeObserver(check)
+    observer.observe(el)
+    return () => {
+      el.removeEventListener("scroll", check)
+      observer.disconnect()
+    }
+  }, [ref, itemCount])
+  return hasMore
+}
+
 export function SiteHeader() {
   const location = useLocation()
   const { isAdmin, isSuperAdmin } = useAuth()
@@ -65,6 +95,9 @@ export function SiteHeader() {
     const base: NavItem[] = [
       { label: "Pozos", to: "/pozos", matchPrefix: "/pozos" },
     ]
+    // "Clases" is the organizer's lesson agenda — admin-only, same as the
+    // route guard, so a cliente never sees a link they can't follow.
+    //
     // Admins see the full roster page (/jugadores) — plural, "Jugadores".
     // Clientes get the singular "Jugador" that deep-links straight to
     // their own /jugadores/:id detail. The label switch is intentional:
@@ -75,6 +108,7 @@ export function SiteHeader() {
     // invite reached them) gets no "Jugador" link at all — there's
     // nothing to link TO yet.
     if (isAdmin) {
+      base.push({ label: "Clases", to: "/clases" })
       base.push({ label: "Jugadores", to: "/jugadores", matchPrefix: "/jugadores" })
     } else if (myPlayer) {
       base.push({
@@ -89,6 +123,18 @@ export function SiteHeader() {
     if (isSuperAdmin) base.push({ label: "Admin", to: "/admin" })
     return base
   }, [isAdmin, isSuperAdmin, myPlayer])
+
+  const navRef = React.useRef<HTMLElement>(null)
+  const hasScrollRight = useHasScrollRight(navRef, items.length)
+
+  // On a phone the strip is wider than the screen, so the page you're on
+  // can start out scrolled past the edge. Pull it back into view whenever
+  // the route changes.
+  React.useEffect(() => {
+    navRef.current
+      ?.querySelector('[aria-current="page"]')
+      ?.scrollIntoView({ inline: "nearest", block: "nearest" })
+  }, [location.pathname, items.length])
 
   function isActive(item: NavItem): boolean {
     if (item.matchPrefix) {
@@ -126,9 +172,19 @@ export function SiteHeader() {
           </span>
         </Link>
 
+        {/* Scrolls sideways instead of squeezing the account menu: an admin
+            carries five destinations and they don't fit across a 375 px
+            phone. `min-w-0` lets the strip shrink, the scrollbar is hidden
+            (it would sit on top of the labels), and the trailing fade is
+            what's left to say "keep swiping". */}
         <nav
+          ref={navRef}
           aria-label="Principal"
-          className="flex items-center gap-0.5 text-sm sm:gap-1"
+          className={cn(
+            "flex min-w-0 items-center gap-0.5 overflow-x-auto text-sm [-ms-overflow-style:none] [scrollbar-width:none] sm:gap-1 [&::-webkit-scrollbar]:hidden",
+            hasScrollRight &&
+              "[mask-image:linear-gradient(to_right,#000_calc(100%-1.5rem),transparent)]",
+          )}
         >
           {items.map((item) => {
             const active = isActive(item)
@@ -138,7 +194,7 @@ export function SiteHeader() {
                 key={item.to}
                 to={item.to}
                 className={cn(
-                  "inline-flex h-8 items-center gap-1.5 rounded-md px-2 font-medium transition-colors sm:px-3",
+                  "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 font-medium transition-colors sm:px-3",
                   active
                     ? "text-foreground"
                     : "text-muted-foreground hover:text-foreground",

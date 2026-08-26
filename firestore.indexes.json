@@ -40,6 +40,14 @@
         { "fieldPath": "linkedUids", "arrayConfig": "CONTAINS" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "classes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "ownerId", "order": "ASCENDING" },
+        { "fieldPath": "startsAt", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

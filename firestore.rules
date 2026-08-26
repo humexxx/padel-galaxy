@@ -188,6 +188,43 @@ service cloud.firestore {
       allow delete: if isOwner(resource.data.ownerId) || isAdmin();
     }
 
+    // The organizer's lesson agenda. Each class is one document; a package
+    // of 3 or 5 lessons is N documents sharing a `packageId`, so a single
+    // session can be moved or cancelled without touching its siblings.
+    //
+    // Writes are admin-only on purpose: this is the coach's own book, not
+    // something a cliente can add themselves. Reads follow the same tier —
+    // there's no cliente-facing view of the agenda yet, and the split
+    // `allow read` statements keep the owner-scoped query provable by
+    // Firestore's static analyzer (see the /pozos read rule for why).
+    match /classes/{classId} {
+      allow read: if isOwner(resource.data.ownerId);
+      allow read: if isAdmin();
+      allow create: if isAdmin()
+                    && request.resource.data.ownerId == request.auth.uid
+                    && request.resource.data.startsAt is number
+                    && request.resource.data.durationMin is number
+                    && request.resource.data.durationMin > 0
+                    && request.resource.data.durationMin <= 480
+                    && request.resource.data.students is list
+                    && request.resource.data.students.size() >= 1
+                    && request.resource.data.students.size() <= 4
+                    && isNonEmptyString(request.resource.data.packageId, 64)
+                    && request.resource.data.status in ['scheduled', 'done', 'cancelled'];
+      allow update: if isAdmin()
+                    && request.resource.data.ownerId == resource.data.ownerId
+                    && request.resource.data.packageId == resource.data.packageId
+                    && request.resource.data.startsAt is number
+                    && request.resource.data.durationMin is number
+                    && request.resource.data.durationMin > 0
+                    && request.resource.data.durationMin <= 480
+                    && request.resource.data.students is list
+                    && request.resource.data.students.size() >= 1
+                    && request.resource.data.students.size() <= 4
+                    && request.resource.data.status in ['scheduled', 'done', 'cancelled'];
+      allow delete: if isOwner(resource.data.ownerId) || isAdmin();
+    }
+
     // App-wide settings — readable by anyone (signup flow needs to check before
     // a user is authenticated), writable only by superadmin (the toggle for
     // open registration is sensitive).

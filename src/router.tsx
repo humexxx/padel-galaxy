@@ -21,6 +21,8 @@ import { AppLayout } from "@/routes/app-layout"
  *   - /jugadores/:id + /grupos/:id: pull in recharts (~300 KB) — defer until
  *     the user actually opens a detail page.
  *   - /pozos/nuevo: heavy form with comboboxes + algorithm preview.
+ *   - /clases: admin-only agenda — the form pulls in comboboxes and
+ *     the responsive dialog that no other route needs.
  *   - /settings: low-traffic, easy win.
  */
 function lazyEl(loader: () => Promise<{ default: React.ComponentType }>) {
@@ -64,6 +66,8 @@ const GrupoDetallePage = () =>
   }))
 const SettingsPage = () =>
   import("@/routes/settings").then((m) => ({ default: m.SettingsPage }))
+const ClasesPage = () =>
+  import("@/routes/clases").then((m) => ({ default: m.ClasesPage }))
 const AdminPage = () =>
   import("@/routes/admin").then((m) => ({ default: m.AdminPage }))
 const NotFoundPage = () =>
@@ -105,6 +109,9 @@ export const router = createBrowserRouter([
             element: <AppLayout />,
             children: [
               { path: "/pozos/nuevo", element: lazyEl(NuevoPozoPage) },
+              // The class agenda is the coach's own tool — clientes have
+              // no view into it, so it lives behind the admin guard.
+              { path: "/clases", element: lazyEl(ClasesPage) },
               // Roster list is an organizer tool. Clientes get "Mi perfil"
               // in the header instead, deep-linking to their own
               // /jugadores/:id detail.

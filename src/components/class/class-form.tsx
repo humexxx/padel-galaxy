@@ -1,34 +1,42 @@
 import * as React from "react"
+import { XIcon } from "lucide-react"
 import { doc, collection } from "firebase/firestore"
+import { es } from "react-day-picker/locale"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
+import { Calendar } from "@/components/ui/calendar"
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
 import { ResponsiveDialog } from "@/components/ui/responsive-dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { PlayerCombobox, type PlayerSelection } from "@/components/pozo/player-combobox"
 import { useAuth } from "@/contexts/auth-context"
 import { usePlayers } from "@/hooks/use-players"
 import {
-  CADENCE_OPTIONS,
-  DEFAULT_DURATION_MIN,
-  DURATION_OPTIONS,
+  CLASS_TIME_OPTIONS,
   MAX_STUDENTS,
   PACKAGE_OPTIONS,
   SESSIONS_BY_PACKAGE,
-  buildSessionStarts,
   createClassPackage,
+  dateFromInputValue,
   dateInputValue,
   defaultClassStart,
-  formatShortDate,
+  formatDayHeading,
+  mergeSessionDays,
+  sessionStartsFromDays,
   timeInputValue,
-  toTimestamp,
   updateClass,
-  type ClassCadence,
   type ClassPackageType,
   type ClassRecord,
   type ClassStudent,
+  type SessionDay,
 } from "@/lib/classes"
 import { db } from "@/lib/firebase"
 import { createPlayer, findPlayerByName, normalizeName } from "@/lib/players"
@@ -47,6 +55,18 @@ function emptySlot(): PlayerSelection {
   return { id: null, name: "" }
 }
 
+/** The next full hour, snapped to the pick-list; 18:00 when it isn't on it. */
+function suggestedTime(): string {
+  const t = timeInputValue(defaultClassStart())
+  return CLASS_TIME_OPTIONS.includes(t) ? t : "18:00"
+}
+
+function startOfToday(): Date {
+  const d = new Date()
+  d.setHours(0, 0, 0, 0)
+  return d
+}
+
 export function ClassForm({ open, onOpenChange, editing }: Props) {
   const { user } = useAuth()
   const { players: roster } = usePlayers()
@@ -55,11 +75,7 @@ export function ClassForm({ open, onOpenChange, editing }: Props) {
   const [slots, setSlots] = React.useState<PlayerSelection[]>([emptySlot()])
   const [packageType, setPackageType] =
     React.useState<ClassPackageType>("individual")
-  const [cadence, setCadence] = React.useState<ClassCadence>("weekly")
-  const [date, setDate] = React.useState("")
-  const [time, setTime] = React.useState("")
-  const [durationMin, setDurationMin] = React.useState(DEFAULT_DURATION_MIN)
-  const [location, setLocation] = React.useState("")
+  const [days, setDays] = React.useState<SessionDay[]>([])
   const [notes, setNotes] = React.useState("")
   const [saving, setSaving] = React.useState(false)
 
@@ -67,31 +83,28 @@ export function ClassForm({ open, onOpenChange, editing }: Props) {
   // opened, so a cancelled draft never leaks into the next booking.
   React.useEffect(() => {
     if (!open) return
-    const base = editing?.startsAt ?? defaultClassStart()
-    setDate(dateInputValue(base))
-    setTime(timeInputValue(base))
-    setDurationMin(editing?.durationMin ?? DEFAULT_DURATION_MIN)
     setSlots(
       editing
         ? editing.students.map((s) => ({ id: s.id, name: s.name }))
         : [emptySlot()],
     )
     setPackageType(editing?.packageType ?? "individual")
-    setCadence("weekly")
-    setLocation(editing?.location ?? "")
+    setDays(
+      editing
+        ? [
+            {
+              date: dateInputValue(editing.startsAt),
+              time: timeInputValue(editing.startsAt),
+            },
+          ]
+        : [],
+    )
     setNotes(editing?.notes ?? "")
   }, [open, editing])
 
-  const startsAt = toTimestamp(date, time)
-  const sessionCount = SESSIONS_BY_PACKAGE[packageType]
-  // Only new bookings lay out sessions — editing touches this class alone.
-  const sessionStarts = React.useMemo(
-    () =>
-      isEdit || Number.isNaN(startsAt)
-        ? []
-        : buildSessionStarts(startsAt, sessionCount, cadence),
-    [isEdit, startsAt, sessionCount, cadence],
-  )
+  // Editing touches one session; a new booking needs one day per session.
+  const sessionCount = isEdit ? 1 : SESSIONS_BY_PACKAGE[packageType]
+  const remaining = sessionCount - days.length
 
   const pickedIds = React.useMemo(() => {
     const ids = new Set<string>()
@@ -106,9 +119,14 @@ export function ClassForm({ open, onOpenChange, editing }: Props) {
     const keys = named.map((s) => normalizeName(s.name))
     if (new Set(keys).size !== keys.length)
       out.push("Hay un alumno repetido en la clase.")
-    if (Number.isNaN(startsAt)) out.push("Elegí una fecha y una hora.")
+    if (days.length !== sessionCount)
+      out.push(
+        sessionCount === 1
+          ? "Marcá el día en el calendario."
+          : `Marcá ${sessionCount} días en el calendario.`,
+      )
     return out
-  }, [slots, startsAt])
+  }, [slots, days.length, sessionCount])
 
   function setStudentCount(count: number) {
     setSlots((curr) => {
@@ -123,6 +141,35 @@ export function ClassForm({ open, onOpenChange, editing }: Props) {
 
   function updateSlot(index: number, next: PlayerSelection) {
     setSlots((curr) => curr.map((s, i) => (i === index ? next : s)))
+  }
+
+  function choosePackage(next: ClassPackageType) {
+    setPackageType(next)
+    // A smaller pack keeps the earliest days already marked.
+    setDays((curr) => curr.slice(0, SESSIONS_BY_PACKAGE[next]))
+  }
+
+  function handleCalendarSelect(dates: Date[] | undefined) {
+    const selected = (dates ?? []).map((d) => dateInputValue(d.getTime()))
+    // react-day-picker's own `max` would restart the selection from the
+    // extra day; a full package should just refuse the tap and say why.
+    if (selected.length > sessionCount) {
+      toast.info(
+        sessionCount === 1
+          ? "Ya marcaste el día. Desmarcalo para elegir otro."
+          : `Ya marcaste los ${sessionCount} días. Desmarcá uno para cambiarlo.`,
+      )
+      return
+    }
+    setDays((curr) => mergeSessionDays(curr, selected, suggestedTime()))
+  }
+
+  function setDayTime(date: string, time: string) {
+    setDays((curr) => curr.map((d) => (d.date === date ? { ...d, time } : d)))
+  }
+
+  function removeDay(date: string) {
+    setDays((curr) => curr.filter((d) => d.date !== date))
   }
 
   /** Turn each slot into a real /players record, creating the ones the
@@ -154,12 +201,11 @@ export function ClassForm({ open, onOpenChange, editing }: Props) {
     setSaving(true)
     try {
       const students = await resolveStudents(user.uid)
+      const startsAt = sessionStartsFromDays(days)
       if (editing) {
         await updateClass(editing.id, {
-          startsAt,
-          durationMin,
+          startsAt: startsAt[0],
           students,
-          location: location.trim() || null,
           notes: notes.trim() || null,
         })
         toast.success("Clase actualizada")
@@ -168,10 +214,7 @@ export function ClassForm({ open, onOpenChange, editing }: Props) {
           ownerId: user.uid,
           students,
           packageType,
-          firstStartsAt: startsAt,
-          durationMin,
-          cadence,
-          location,
+          startsAt,
           notes,
         })
         toast.success(
@@ -191,6 +234,11 @@ export function ClassForm({ open, onOpenChange, editing }: Props) {
     }
   }
 
+  const selectedDates = React.useMemo(
+    () => days.map((d) => dateFromInputValue(d.date)),
+    [days],
+  )
+
   return (
     <ResponsiveDialog
       open={open}
@@ -199,7 +247,7 @@ export function ClassForm({ open, onOpenChange, editing }: Props) {
       description={
         isEdit
           ? "Los cambios aplican solo a esta clase del paquete."
-          : "Elegí los alumnos, el paquete y cuándo arranca."
+          : "Elegí los alumnos, el paquete y marcá los días en el calendario."
       }
       footer={
         <>
@@ -278,7 +326,7 @@ export function ClassForm({ open, onOpenChange, editing }: Props) {
                   hint: o.description,
                 }))}
                 value={packageType}
-                onChange={setPackageType}
+                onChange={choosePackage}
                 ariaLabel="Paquete de clases"
                 disabled={saving}
                 stacked
@@ -286,80 +334,52 @@ export function ClassForm({ open, onOpenChange, editing }: Props) {
             </Field>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
-            <Field>
-              <FieldLabel htmlFor="class-date">Fecha</FieldLabel>
-              <Input
-                id="class-date"
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="h-11 sm:h-9"
-                required
-                disabled={saving}
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="class-time">Hora</FieldLabel>
-              <Input
-                id="class-time"
-                type="time"
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                className="h-11 sm:h-9"
-                required
-                disabled={saving}
-              />
-            </Field>
-          </div>
-
           <Field>
-            <FieldLabel>Duración</FieldLabel>
-            <ChoiceRow
-              options={DURATION_OPTIONS.map((m) => ({
-                value: m,
-                label: `${m} min`,
-              }))}
-              value={durationMin}
-              onChange={setDurationMin}
-              ariaLabel="Duración de la clase"
-              disabled={saving}
-            />
-          </Field>
-
-          {!isEdit && sessionCount > 1 && (
-            <Field>
-              <FieldLabel>Repetir</FieldLabel>
-              <ChoiceRow
-                options={CADENCE_OPTIONS.map((o) => ({
-                  value: o.value,
-                  label: o.label,
-                }))}
-                value={cadence}
-                onChange={setCadence}
-                ariaLabel="Frecuencia del paquete"
-                disabled={saving}
-                stacked
+            <FieldLabel>
+              {isEdit
+                ? "Día"
+                : sessionCount === 1
+                  ? "Día de la clase"
+                  : `Días · ${days.length} de ${sessionCount}`}
+            </FieldLabel>
+            {/* Bigger cells on touch so a day is a 44 px target; the
+                desktop dialog goes back to the compact default. */}
+            <div className="flex justify-center rounded-lg border">
+              <Calendar
+                mode="multiple"
+                locale={es}
+                selected={selectedDates}
+                onSelect={handleCalendarSelect}
+                min={isEdit ? 1 : undefined}
+                defaultMonth={selectedDates[0] ?? startOfToday()}
+                disabled={{ before: startOfToday() }}
+                className="[--cell-size:2.75rem] sm:[--cell-size:2.25rem]"
               />
-              {sessionStarts.length > 0 && (
-                <FieldDescription>
-                  Se agendan {sessionStarts.length} clases:{" "}
-                  {sessionStarts.map(formatShortDate).join(" · ")}
-                </FieldDescription>
-              )}
-            </Field>
-          )}
-
-          <Field>
-            <FieldLabel htmlFor="class-location">Lugar (opcional)</FieldLabel>
-            <Input
-              id="class-location"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="Cancha 2"
-              className="h-11 sm:h-9"
-              disabled={saving}
-            />
+            </div>
+            {!isEdit && (
+              <FieldDescription>
+                {remaining > 0
+                  ? remaining === sessionCount
+                    ? sessionCount === 1
+                      ? "Tocá el día de la clase."
+                      : `Tocá los ${sessionCount} días del paquete, uno por clase.`
+                    : `Falta${remaining > 1 ? "n" : ""} ${remaining} día${remaining > 1 ? "s" : ""} por marcar.`
+                  : "Listo. Ajustá la hora de cada clase si hace falta."}
+              </FieldDescription>
+            )}
+            {days.length > 0 && (
+              <div className="space-y-2">
+                {days.map((day) => (
+                  <SessionRow
+                    key={day.date}
+                    day={day}
+                    onTimeChange={(time) => setDayTime(day.date, time)}
+                    onRemove={isEdit ? undefined : () => removeDay(day.date)}
+                    disabled={saving}
+                  />
+                ))}
+              </div>
+            )}
           </Field>
 
           <Field>
@@ -376,6 +396,68 @@ export function ClassForm({ open, onOpenChange, editing }: Props) {
         </FieldGroup>
       </form>
     </ResponsiveDialog>
+  )
+}
+
+/** One picked day with its start time. */
+function SessionRow({
+  day,
+  onTimeChange,
+  onRemove,
+  disabled,
+}: {
+  day: SessionDay
+  onTimeChange: (time: string) => void
+  onRemove?: () => void
+  disabled?: boolean
+}) {
+  // A legacy record can carry a time that's off the half-hour grid; keep it
+  // selectable rather than showing an empty trigger.
+  const options = CLASS_TIME_OPTIONS.includes(day.time)
+    ? CLASS_TIME_OPTIONS
+    : [...CLASS_TIME_OPTIONS, day.time].sort()
+  const label = formatDayHeading(dateFromInputValue(day.date).getTime())
+
+  return (
+    <div className="flex items-center gap-2 rounded-lg border bg-card px-3 py-1.5">
+      <span className="min-w-0 flex-1 truncate text-sm font-medium first-letter:uppercase">
+        {label}
+      </span>
+      <Select
+        value={day.time}
+        onValueChange={(v) => {
+          if (v) onTimeChange(v)
+        }}
+        disabled={disabled}
+      >
+        <SelectTrigger
+          aria-label={`Hora de la clase del ${label}`}
+          className="h-10 w-24 justify-between tabular-nums sm:h-8"
+        >
+          <SelectValue>{(value) => String(value)}</SelectValue>
+        </SelectTrigger>
+        <SelectContent alignItemWithTrigger={false}>
+          {options.map((t) => (
+            <SelectItem key={t} value={t} className="tabular-nums">
+              {t}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {onRemove && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-10 sm:size-8"
+          aria-label={`Quitar ${label}`}
+          onClick={onRemove}
+          disabled={disabled}
+        >
+          <XIcon className="size-4" />
+        </Button>
+      )}
+    </div>
   )
 }
 

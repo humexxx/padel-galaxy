@@ -29,9 +29,6 @@ export type ClassPackageType = "individual" | "pack3" | "pack5"
 
 export type ClassStatus = "scheduled" | "done" | "cancelled"
 
-/** How the sessions of a multi-class package get laid out on the calendar. */
-export type ClassCadence = "weekly" | "biweekly" | "daily"
-
 /**
  * One scheduled lesson. A package of 3 or 5 classes is stored as 3 or 5
  * separate documents sharing a `packageId` — that way each session can be
@@ -63,20 +60,17 @@ export type ClassRecord = {
 
 export const MAX_STUDENTS = 4
 
+function pad(n: number): string {
+  return n.toString().padStart(2, "0")
+}
+
 export const SESSIONS_BY_PACKAGE: Record<ClassPackageType, number> = {
   individual: 1,
   pack3: 3,
   pack5: 5,
 }
 
-const CADENCE_DAYS: Record<ClassCadence, number> = {
-  daily: 1,
-  weekly: 7,
-  biweekly: 14,
-}
-
 export const DEFAULT_DURATION_MIN = 60
-export const DURATION_OPTIONS = [45, 60, 90, 120] as const
 
 export const PACKAGE_OPTIONS: {
   value: ClassPackageType
@@ -86,12 +80,6 @@ export const PACKAGE_OPTIONS: {
   { value: "individual", label: "Individual", description: "1 clase" },
   { value: "pack3", label: "Pack de 3", description: "3 clases" },
   { value: "pack5", label: "Pack de 5", description: "5 clases" },
-]
-
-export const CADENCE_OPTIONS: { value: ClassCadence; label: string }[] = [
-  { value: "weekly", label: "Semanal" },
-  { value: "biweekly", label: "Quincenal" },
-  { value: "daily", label: "Diaria" },
 ]
 
 export function packageLabel(type: ClassPackageType): string {
@@ -115,10 +103,6 @@ export function classEndsAt(record: ClassRecord): number {
 // standing at the club, so sessions are stepped with `setDate` (which keeps
 // the hour across a DST jump) rather than by adding fixed millis.
 // ---------------------------------------------------------------------------
-
-function pad(n: number): string {
-  return n.toString().padStart(2, "0")
-}
 
 /** Local-time value for an `<input type="date">`. */
 export function dateInputValue(ts: number): string {
@@ -153,18 +137,49 @@ export function toTimestamp(date: string, time: string): number {
   return parsed.getTime()
 }
 
-/** Start timestamps for every session of a package, first one included. */
-export function buildSessionStarts(
-  firstStartsAt: number,
-  count: number,
-  cadence: ClassCadence,
-): number[] {
-  const step = CADENCE_DAYS[cadence]
-  return Array.from({ length: Math.max(1, count) }, (_, i) => {
-    const d = new Date(firstStartsAt)
-    d.setDate(d.getDate() + i * step)
-    return d.getTime()
-  })
+/** One picked session: a calendar day plus the time it starts. */
+export type SessionDay = {
+  /** "YYYY-MM-DD", local. */
+  date: string
+  /** "HH:MM", local. */
+  time: string
+}
+
+/**
+ * Half-hour slots across a club's day. A list, not a free-text time: every
+ * class here starts on the hour or half past, and a pick-list is one tap
+ * on a phone where a time input is a spinner.
+ */
+export const CLASS_TIME_OPTIONS: string[] = Array.from(
+  { length: (23 - 7) * 2 + 1 },
+  (_, i) => `${pad(7 + Math.floor(i / 2))}:${i % 2 ? "30" : "00"}`,
+)
+
+/** Local midnight of a "YYYY-MM-DD" input value, for the calendar. */
+export function dateFromInputValue(date: string): Date {
+  return new Date(toTimestamp(date, "00:00"))
+}
+
+/** Timestamps for the picked sessions, earliest first. */
+export function sessionStartsFromDays(days: SessionDay[]): number[] {
+  return days.map((d) => toTimestamp(d.date, d.time)).sort((a, b) => a - b)
+}
+
+/**
+ * Reconcile a calendar selection with the days already picked: days that
+ * stay keep their time, new days borrow the time of the latest pick (a
+ * coach usually books the same slot), and the result is chronological.
+ */
+export function mergeSessionDays(
+  current: SessionDay[],
+  selectedDates: string[],
+  fallbackTime: string,
+): SessionDay[] {
+  const byDate = new Map(current.map((d) => [d.date, d]))
+  const latest = current[current.length - 1]?.time ?? fallbackTime
+  return selectedDates
+    .map((date) => byDate.get(date) ?? { date, time: latest })
+    .sort((a, b) => a.date.localeCompare(b.date))
 }
 
 /**
@@ -184,14 +199,6 @@ export function defaultClassStart(now: number = Date.now()): number {
     d.setHours(9, 0, 0, 0)
   }
   return d.getTime()
-}
-
-/** "26 ago" — compact enough for the multi-session preview line. */
-export function formatShortDate(ts: number): string {
-  return new Date(ts).toLocaleDateString("es-AR", {
-    day: "numeric",
-    month: "short",
-  })
 }
 
 /** Stable local-day key, used to bucket the agenda into day sections. */
@@ -335,10 +342,9 @@ export type CreateClassPackageInput = {
   ownerId: string
   students: ClassStudent[]
   packageType: ClassPackageType
-  /** Start of the FIRST session; the rest are derived from `cadence`. */
-  firstStartsAt: number
-  durationMin: number
-  cadence: ClassCadence
+  /** One start per session, as many as the package has. Any order. */
+  startsAt: number[]
+  durationMin?: number
   location?: string | null
   notes?: string | null
 }
@@ -352,14 +358,18 @@ export async function createClassPackage({
   ownerId,
   students,
   packageType,
-  firstStartsAt,
-  durationMin,
-  cadence,
+  startsAt,
+  durationMin = DEFAULT_DURATION_MIN,
   location,
   notes,
 }: CreateClassPackageInput): Promise<ClassRecord[]> {
   const sessionCount = SESSIONS_BY_PACKAGE[packageType]
-  const starts = buildSessionStarts(firstStartsAt, sessionCount, cadence)
+  if (startsAt.length !== sessionCount) {
+    throw new Error(
+      `Un ${packageLabel(packageType)} necesita ${sessionCount} fechas, llegaron ${startsAt.length}`,
+    )
+  }
+  const starts = [...startsAt].sort((a, b) => a - b)
   const packageId = newClassId()
   const now = Date.now()
 

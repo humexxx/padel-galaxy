@@ -1,13 +1,16 @@
 import { describe, it, expect } from "vitest"
 
 import {
-  buildSessionStarts,
+  CLASS_TIME_OPTIONS,
+  dateFromInputValue,
   dateInputValue,
   defaultClassStart,
   formatDayHeading,
   groupByDay,
   isUpcoming,
+  mergeSessionDays,
   sessionLabel,
+  sessionStartsFromDays,
   splitClasses,
   studentsLabel,
   timeInputValue,
@@ -62,39 +65,71 @@ describe("toTimestamp", () => {
   })
 })
 
-describe("buildSessionStarts", () => {
-  it("includes the first session and steps weekly by default", () => {
-    const first = at(2026, 8, 26, 18, 0)
-    expect(buildSessionStarts(first, 3, "weekly")).toEqual([
-      first,
-      at(2026, 9, 2, 18, 0),
+describe("CLASS_TIME_OPTIONS", () => {
+  it("runs from 07:00 to 23:00 in half hours", () => {
+    expect(CLASS_TIME_OPTIONS[0]).toBe("07:00")
+    expect(CLASS_TIME_OPTIONS[1]).toBe("07:30")
+    expect(CLASS_TIME_OPTIONS[CLASS_TIME_OPTIONS.length - 1]).toBe("23:00")
+    expect(CLASS_TIME_OPTIONS).toHaveLength(33)
+  })
+})
+
+describe("dateFromInputValue", () => {
+  it("lands on local midnight of that day", () => {
+    const d = dateFromInputValue("2026-08-26")
+    expect([d.getFullYear(), d.getMonth(), d.getDate(), d.getHours()]).toEqual([
+      2026, 7, 26, 0,
+    ])
+  })
+})
+
+describe("sessionStartsFromDays", () => {
+  it("orders the picked sessions chronologically", () => {
+    const starts = sessionStartsFromDays([
+      { date: "2026-09-09", time: "18:00" },
+      { date: "2026-09-02", time: "20:00" },
+      { date: "2026-09-02", time: "09:00" },
+    ])
+    expect(starts).toEqual([
+      at(2026, 9, 2, 9, 0),
+      at(2026, 9, 2, 20, 0),
       at(2026, 9, 9, 18, 0),
     ])
   })
+})
 
-  it("steps fortnightly and daily", () => {
-    const first = at(2026, 8, 26, 18, 0)
-    expect(buildSessionStarts(first, 2, "biweekly")).toEqual([
-      first,
-      at(2026, 9, 9, 18, 0),
-    ])
-    expect(buildSessionStarts(first, 2, "daily")).toEqual([
-      first,
-      at(2026, 8, 27, 18, 0),
+describe("mergeSessionDays", () => {
+  it("keeps the time of days that stay selected", () => {
+    const merged = mergeSessionDays(
+      [{ date: "2026-09-02", time: "20:00" }],
+      ["2026-09-02", "2026-09-09"],
+      "18:00",
+    )
+    expect(merged).toEqual([
+      { date: "2026-09-02", time: "20:00" },
+      { date: "2026-09-09", time: "20:00" },
     ])
   })
 
-  it("keeps the wall-clock hour when stepping across a month boundary", () => {
-    const starts = buildSessionStarts(at(2026, 1, 29, 20, 30), 5, "weekly")
-    for (const ts of starts) {
-      const d = new Date(ts)
-      expect([d.getHours(), d.getMinutes()]).toEqual([20, 30])
-    }
-    expect(dateInputValue(starts[4])).toBe("2026-02-26")
+  it("uses the fallback time for the very first pick", () => {
+    expect(mergeSessionDays([], ["2026-09-02"], "18:00")).toEqual([
+      { date: "2026-09-02", time: "18:00" },
+    ])
   })
 
-  it("never returns an empty schedule", () => {
-    expect(buildSessionStarts(at(2026, 8, 26), 0, "weekly")).toHaveLength(1)
+  it("drops days that were unselected and sorts the rest", () => {
+    const merged = mergeSessionDays(
+      [
+        { date: "2026-09-02", time: "20:00" },
+        { date: "2026-09-09", time: "19:00" },
+      ],
+      ["2026-09-16", "2026-09-09"],
+      "18:00",
+    )
+    expect(merged).toEqual([
+      { date: "2026-09-09", time: "19:00" },
+      { date: "2026-09-16", time: "19:00" },
+    ])
   })
 })
 

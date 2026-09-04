@@ -1,6 +1,7 @@
 import { Link } from "react-router"
 import { ArrowRightIcon } from "lucide-react"
 
+import { LogoMark } from "@/components/brand-logo"
 import { InstallAppButton } from "@/components/install-app"
 
 const NAV_LINKS = [
@@ -18,13 +19,7 @@ export function LandingNav() {
             to="/"
             className="flex items-center gap-2 text-[15px] font-semibold tracking-tight text-zinc-900"
           >
-            <img
-              src="/favicon.svg"
-              alt=""
-              width={24}
-              height={24}
-              className="select-none"
-            />
+            <LogoMark className="size-6" />
             Padel Galaxy
           </Link>
           <nav className="hidden items-center gap-6 md:flex">

@@ -16,7 +16,7 @@ export function LoginPage() {
       </div>
       <div className="relative hidden bg-[#0b0820] lg:block">
         <img
-          src="/login-bg.jpg"
+          src="/login-bg.svg"
           alt="Padel Galaxy"
           className="absolute inset-0 h-full w-full object-cover"
         />

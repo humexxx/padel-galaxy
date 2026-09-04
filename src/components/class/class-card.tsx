@@ -1,5 +1,6 @@
 import {
   BanIcon,
+  CalendarArrowUpIcon,
   CircleCheckIcon,
   MapPinIcon,
   MoreVerticalIcon,
@@ -34,9 +35,16 @@ type Props = {
   record: ClassRecord
   onEdit: (record: ClassRecord) => void
   onRequestDelete: (record: ClassRecord) => void
+  /** Hand this class — or its whole package — to the device calendar. */
+  onAddToCalendar: (record: ClassRecord, wholePackage: boolean) => void
 }
 
-export function ClassCard({ record, onEdit, onRequestDelete }: Props) {
+export function ClassCard({
+  record,
+  onEdit,
+  onRequestDelete,
+  onAddToCalendar,
+}: Props) {
   const done = record.status === "done"
   const cancelled = record.status === "cancelled"
   const session = sessionLabel(record)
@@ -136,7 +144,7 @@ export function ClassCard({ record, onEdit, onRequestDelete }: Props) {
         >
           <MoreVerticalIcon className="size-4" />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="min-w-48">
+        <DropdownMenuContent align="end" className="min-w-60">
           {done ? (
             <DropdownMenuItem
               onClick={() =>
@@ -174,6 +182,19 @@ export function ClassCard({ record, onEdit, onRequestDelete }: Props) {
             </DropdownMenuItem>
           )}
           <DropdownMenuSeparator />
+          {!cancelled && (
+            <DropdownMenuItem onClick={() => onAddToCalendar(record, false)}>
+              <CalendarArrowUpIcon className="size-4" />
+              Agregar al calendario
+            </DropdownMenuItem>
+          )}
+          {record.sessionCount > 1 && (
+            <DropdownMenuItem onClick={() => onAddToCalendar(record, true)}>
+              <CalendarArrowUpIcon className="size-4" />
+              Agregar el paquete ({record.sessionCount} clases)
+            </DropdownMenuItem>
+          )}
+          {(!cancelled || record.sessionCount > 1) && <DropdownMenuSeparator />}
           <DropdownMenuItem
             variant="destructive"
             onClick={() => onRequestDelete(record)}

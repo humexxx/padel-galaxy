@@ -1,5 +1,10 @@
 import * as React from "react"
-import { CalendarPlusIcon, GraduationCapIcon, SearchIcon } from "lucide-react"
+import {
+  CalendarArrowUpIcon,
+  CalendarPlusIcon,
+  GraduationCapIcon,
+  SearchIcon,
+} from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -19,6 +24,12 @@ import { ClassCard } from "@/components/class/class-card"
 import { ClassForm } from "@/components/class/class-form"
 import { useClasses } from "@/hooks/use-classes"
 import { useNow } from "@/hooks/use-now"
+import {
+  buildClassesIcs,
+  exportableClasses,
+  icsFilename,
+  openIcs,
+} from "@/lib/calendar"
 import {
   deleteClass,
   deleteClassPackage,
@@ -70,6 +81,37 @@ export function ClasesPage() {
   function openEdit(record: ClassRecord) {
     setEditing(record)
     setFormOpen(true)
+  }
+
+  function addToCalendar(records: ClassRecord[]) {
+    const exportable = exportableClasses(records)
+    if (exportable.length === 0) {
+      toast.error("No hay clases para agregar al calendario")
+      return
+    }
+    try {
+      const how = openIcs(buildClassesIcs(exportable), icsFilename(exportable))
+      // iOS shows its own "Agregar" sheet, so only the download path needs
+      // a hint about where the file went.
+      if (how === "downloaded") {
+        toast.success(
+          exportable.length === 1
+            ? "Se descargó la clase (.ics). Abrila para agregarla al calendario."
+            : `Se descargaron ${exportable.length} clases (.ics). Abrí el archivo para agregarlas al calendario.`,
+        )
+      }
+    } catch (err) {
+      console.error("Error exporting classes to calendar:", err)
+      toast.error("No se pudo exportar al calendario")
+    }
+  }
+
+  function addToCalendarFromCard(record: ClassRecord, wholePackage: boolean) {
+    addToCalendar(
+      wholePackage
+        ? classes.filter((c) => c.packageId === record.packageId)
+        : [record],
+    )
   }
 
   return (
@@ -137,12 +179,31 @@ export function ClasesPage() {
               }
             />
           ) : (
-            <DayGroups
-              records={upcoming}
-              now={now}
-              onEdit={openEdit}
-              onRequestDelete={setPendingDelete}
-            />
+            <>
+              {upcoming.length > 0 && (
+                <div className="flex justify-end">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-10 sm:h-8"
+                    onClick={() => addToCalendar(upcoming)}
+                  >
+                    <CalendarArrowUpIcon className="size-4" />
+                    Agregar al calendario
+                    <span className="rounded-full bg-muted px-1.5 text-[10px] font-semibold tabular-nums">
+                      {upcoming.length}
+                    </span>
+                  </Button>
+                </div>
+              )}
+              <DayGroups
+                records={upcoming}
+                now={now}
+                onEdit={openEdit}
+                onRequestDelete={setPendingDelete}
+                onAddToCalendar={addToCalendarFromCard}
+              />
+            </>
           )}
         </TabsContent>
 
@@ -158,6 +219,7 @@ export function ClasesPage() {
               now={now}
               onEdit={openEdit}
               onRequestDelete={setPendingDelete}
+              onAddToCalendar={addToCalendarFromCard}
             />
           )}
         </TabsContent>
@@ -177,11 +239,13 @@ function DayGroups({
   now,
   onEdit,
   onRequestDelete,
+  onAddToCalendar,
 }: {
   records: ClassRecord[]
   now: number
   onEdit: (record: ClassRecord) => void
   onRequestDelete: (record: ClassRecord) => void
+  onAddToCalendar: (record: ClassRecord, wholePackage: boolean) => void
 }) {
   const groups = React.useMemo(() => groupByDay(records), [records])
 
@@ -201,6 +265,7 @@ function DayGroups({
                 record={record}
                 onEdit={onEdit}
                 onRequestDelete={onRequestDelete}
+                onAddToCalendar={onAddToCalendar}
               />
             ))}
           </div>

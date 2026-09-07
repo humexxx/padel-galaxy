@@ -4,6 +4,7 @@ import {
   CalendarPlusIcon,
   GraduationCapIcon,
   SearchIcon,
+  XIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -31,21 +32,21 @@ import {
   openIcs,
 } from "@/lib/calendar"
 import {
+  dayKey,
   deleteClass,
   deleteClassPackage,
   formatDayHeading,
   groupByDay,
   sessionLabel,
   splitClasses,
+  studentIndex,
   studentsLabel,
   type ClassRecord,
 } from "@/lib/classes"
 import { normalizeName } from "@/lib/players"
+import { cn } from "@/lib/utils"
 
 type Tab = "proximas" | "historial"
-
-/** Show the search box only once scanning the list by eye stops working. */
-const SEARCH_THRESHOLD = 6
 
 export function ClasesPage() {
   const { classes, hydrated } = useClasses()
@@ -54,24 +55,57 @@ export function ClasesPage() {
   const now = useNow(60_000)
   const [tab, setTab] = React.useState<Tab>("proximas")
   const [search, setSearch] = React.useState("")
+  const [studentId, setStudentId] = React.useState<string | null>(null)
+  const [dayFilter, setDayFilter] = React.useState<string | null>(null)
   const [formOpen, setFormOpen] = React.useState(false)
   const [editing, setEditing] = React.useState<ClassRecord | null>(null)
   const [pendingDelete, setPendingDelete] = React.useState<ClassRecord | null>(
     null,
   )
 
+  // Who's on the agenda — the chips. Built from every class, so a regular
+  // stays filterable from Historial once their last session has passed.
+  const students = React.useMemo(() => studentIndex(classes), [classes])
+
   const filtered = React.useMemo(() => {
     const q = normalizeName(search)
-    if (!q) return classes
-    return classes.filter((c) =>
-      c.students.some((s) => normalizeName(s.name).includes(q)),
+    return classes.filter(
+      (c) =>
+        (!studentId || c.students.some((s) => s.id === studentId)) &&
+        (!q || c.students.some((s) => normalizeName(s.name).includes(q))),
     )
-  }, [classes, search])
+  }, [classes, search, studentId])
 
   const { upcoming, past } = React.useMemo(
     () => splitClasses(filtered, now),
     [filtered, now],
   )
+
+  // Day chips for the upcoming side, one per day that has a class.
+  const upcomingDays = React.useMemo(() => groupByDay(upcoming), [upcoming])
+  const visibleUpcoming = React.useMemo(
+    () =>
+      dayFilter
+        ? upcoming.filter((c) => dayKey(c.startsAt) === dayFilter)
+        : upcoming,
+    [upcoming, dayFilter],
+  )
+
+  // A day chip can vanish under us (class moved, taught, cancelled) — drop
+  // the filter instead of showing an empty list with no chip to clear it.
+  React.useEffect(() => {
+    if (dayFilter && !upcomingDays.some((g) => g.key === dayFilter)) {
+      setDayFilter(null)
+    }
+  }, [dayFilter, upcomingDays])
+
+  const filtering = Boolean(search || studentId || dayFilter)
+
+  function clearFilters() {
+    setSearch("")
+    setStudentId(null)
+    setDayFilter(null)
+  }
 
   function openCreate() {
     setEditing(null)
@@ -132,16 +166,37 @@ export function ClasesPage() {
         </Button>
       </div>
 
-      {classes.length > SEARCH_THRESHOLD && (
-        <div className="relative w-full sm:max-w-xs">
-          <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            type="search"
-            placeholder="Buscar por alumno…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="h-11 pl-9 sm:h-9"
-          />
+      {classes.length > 0 && (
+        <div className="space-y-3">
+          <div className="relative w-full sm:max-w-xs">
+            <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="search"
+              placeholder="Buscar por alumno…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-11 pl-9 sm:h-9"
+            />
+          </div>
+          {students.length > 1 && (
+            <ChipRow label="Filtrar por alumno">
+              <Chip active={!studentId} onClick={() => setStudentId(null)}>
+                Todos
+              </Chip>
+              {students.map((s) => (
+                <Chip
+                  key={s.id}
+                  active={studentId === s.id}
+                  onClick={() =>
+                    setStudentId((curr) => (curr === s.id ? null : s.id))
+                  }
+                  count={s.count}
+                >
+                  {s.name}
+                </Chip>
+              ))}
+            </ChipRow>
+          )}
         </div>
       )}
 
@@ -161,43 +216,64 @@ export function ClasesPage() {
           </TabsTrigger>
           <TabsTrigger value="historial" className="text-xs">
             Historial
+            {past.length > 0 && (
+              <span className="ml-1.5 rounded-full bg-muted px-1.5 text-[10px] font-semibold text-muted-foreground tabular-nums">
+                {past.length}
+              </span>
+            )}
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="proximas" className="space-y-5">
+        <TabsContent value="proximas" className="space-y-4">
           {hydrated && upcoming.length === 0 ? (
-            <EmptyState
-              title={
-                search
-                  ? "Ningún alumno coincide con la búsqueda"
-                  : "No tenés clases agendadas"
-              }
-              description={
-                search
-                  ? "Probá con otro nombre o revisá el historial."
-                  : "Agendá la primera: elegí el alumno, el paquete (individual, de 3 o de 5) y el día."
-              }
-            />
+            filtering ? (
+              <FilteredEmpty onClear={clearFilters} />
+            ) : (
+              <EmptyState
+                title="No tenés clases agendadas"
+                description="Agendá la primera: elegí el alumno, el paquete (individual, de 3 o de 5) y marcá los días."
+              />
+            )
           ) : (
             <>
-              {upcoming.length > 0 && (
+              {upcomingDays.length > 1 && (
+                <ChipRow label="Ir a un día">
+                  <Chip active={!dayFilter} onClick={() => setDayFilter(null)}>
+                    Todos
+                  </Chip>
+                  {upcomingDays.map((g) => (
+                    <Chip
+                      key={g.key}
+                      active={dayFilter === g.key}
+                      onClick={() =>
+                        setDayFilter((curr) => (curr === g.key ? null : g.key))
+                      }
+                      count={g.classes.length}
+                      className="first-letter:uppercase"
+                    >
+                      {formatDayHeading(g.ts, now)}
+                    </Chip>
+                  ))}
+                </ChipRow>
+              )}
+              {visibleUpcoming.length > 0 && (
                 <div className="flex justify-end">
                   <Button
                     variant="outline"
                     size="sm"
                     className="h-10 sm:h-8"
-                    onClick={() => addToCalendar(upcoming)}
+                    onClick={() => addToCalendar(visibleUpcoming)}
                   >
                     <CalendarArrowUpIcon className="size-4" />
                     Agregar al calendario
                     <span className="rounded-full bg-muted px-1.5 text-[10px] font-semibold tabular-nums">
-                      {upcoming.length}
+                      {visibleUpcoming.length}
                     </span>
                   </Button>
                 </div>
               )}
               <DayGroups
-                records={upcoming}
+                records={visibleUpcoming}
                 now={now}
                 onEdit={openEdit}
                 onRequestDelete={setPendingDelete}
@@ -207,12 +283,16 @@ export function ClasesPage() {
           )}
         </TabsContent>
 
-        <TabsContent value="historial" className="space-y-5">
+        <TabsContent value="historial" className="space-y-4">
           {hydrated && past.length === 0 ? (
-            <EmptyState
-              title="Todavía no hay historial"
-              description="Las clases dadas, canceladas o ya pasadas van a aparecer acá."
-            />
+            filtering ? (
+              <FilteredEmpty onClear={clearFilters} />
+            ) : (
+              <EmptyState
+                title="Todavía no hay historial"
+                description="Las clases dadas, canceladas o ya pasadas van a aparecer acá."
+              />
+            )
           ) : (
             <DayGroups
               records={past}
@@ -234,6 +314,71 @@ export function ClasesPage() {
   )
 }
 
+/**
+ * A single scrolling row of chips. Bleeds to the screen edges on phones so
+ * the last chip peeks out as the hint that there are more; the scrollbar
+ * is hidden because it would sit on top of the chips.
+ */
+function ChipRow({
+  label,
+  children,
+}: {
+  label: string
+  children: React.ReactNode
+}) {
+  return (
+    <div
+      role="group"
+      aria-label={label}
+      className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0 [&::-webkit-scrollbar]:hidden"
+    >
+      {children}
+    </div>
+  )
+}
+
+function Chip({
+  active,
+  count,
+  onClick,
+  className,
+  children,
+}: {
+  active: boolean
+  count?: number
+  onClick: () => void
+  className?: string
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium whitespace-nowrap transition-colors sm:h-8",
+        "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
+        active
+          ? "border-primary bg-primary text-primary-foreground"
+          : "border-input bg-background text-muted-foreground hover:bg-muted hover:text-foreground",
+        className,
+      )}
+    >
+      {children}
+      {count !== undefined && (
+        <span
+          className={cn(
+            "rounded-full px-1.5 text-[10px] font-semibold tabular-nums",
+            active ? "bg-primary-foreground/20" : "bg-muted",
+          )}
+        >
+          {count}
+        </span>
+      )}
+    </button>
+  )
+}
+
 function DayGroups({
   records,
   now,
@@ -250,7 +395,7 @@ function DayGroups({
   const groups = React.useMemo(() => groupByDay(records), [records])
 
   return (
-    <>
+    <div className="space-y-5">
       {groups.map((group) => (
         <section key={group.key} className="space-y-2">
           {/* Sticks under the app header so the day stays identifiable while
@@ -271,7 +416,7 @@ function DayGroups({
           </div>
         </section>
       ))}
-    </>
+    </div>
   )
 }
 
@@ -291,6 +436,20 @@ function EmptyState({
       <Text variant="muted" className="max-w-md text-sm">
         {description}
       </Text>
+    </div>
+  )
+}
+
+function FilteredEmpty({ onClear }: { onClear: () => void }) {
+  return (
+    <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed bg-card px-6 py-8 text-center">
+      <Text className="text-sm font-medium">
+        Ninguna clase coincide con el filtro.
+      </Text>
+      <Button variant="outline" size="sm" className="h-10 sm:h-8" onClick={onClear}>
+        <XIcon className="size-4" />
+        Limpiar filtros
+      </Button>
     </div>
   )
 }

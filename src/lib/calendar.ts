@@ -15,9 +15,11 @@ import { isIOS } from "@/lib/pwa"
  * lands the organizer on the calendar's own "add" sheet with every event
  * already filled in. That's what `openIcs` does, per platform:
  *
- *   - iOS previews any `text/calendar` navigation natively and offers
- *     "Agregar todo", so we open the file as a data: URL. A download would
- *     only drop it into Archivos and cost two more taps.
+ *   - iOS previews a `text/calendar` resource natively and offers
+ *     "Agregar todo", so we open the file as a blob URL in a new tab. Not a
+ *     data: URL — current Safari refuses those as a top-level navigation,
+ *     which showed up as "nothing happens". A download would only drop the
+ *     file into Archivos and cost two more taps.
  *   - Everywhere else the file is downloaded; Android's download tray and a
  *     desktop double-click both hand it to the default calendar app.
  */
@@ -144,16 +146,17 @@ export function icsFilename(records: ClassRecord[]): string {
  * Returns how it was delivered so the caller can phrase the toast.
  */
 export function openIcs(ics: string, filename: string): "opened" | "downloaded" {
+  const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" })
+  const url = URL.createObjectURL(blob)
+
   if (isIOS()) {
-    const url = `data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}`
     // Popup blocked (in-app browsers do this): navigate the tab itself;
     // the calendar sheet still comes up over it.
     if (!window.open(url, "_blank")) window.location.assign(url)
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
     return "opened"
   }
 
-  const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" })
-  const url = URL.createObjectURL(blob)
   const anchor = document.createElement("a")
   anchor.href = url
   anchor.download = filename

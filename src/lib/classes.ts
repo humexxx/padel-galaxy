@@ -268,6 +268,23 @@ export function splitClasses(
   return { upcoming, past }
 }
 
+export type StudentSummary = { id: string; name: string; count: number }
+
+/** Every student across the given classes, busiest first, then by name. */
+export function studentIndex(records: ClassRecord[]): StudentSummary[] {
+  const byId = new Map<string, StudentSummary>()
+  for (const r of records) {
+    for (const s of r.students) {
+      const entry = byId.get(s.id)
+      if (entry) entry.count += 1
+      else byId.set(s.id, { id: s.id, name: s.name, count: 1 })
+    }
+  }
+  return [...byId.values()].sort(
+    (a, b) => b.count - a.count || a.name.localeCompare(b.name),
+  )
+}
+
 export type ClassDayGroup = {
   key: string
   /** Start of the first class that day — good enough to format the heading. */

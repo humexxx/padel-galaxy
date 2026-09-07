@@ -19,29 +19,21 @@ export function BrandLogo({ className, showWordmark = true }: Props) {
 }
 
 /**
- * The mark: a padel racket, as a filled silhouette — round head with a
- * throat, a 3×3 grid of punched holes, a short handle with a rounded butt.
- * Inline SVG in `currentColor` so it takes the surrounding text color,
- * with no badge and no theme swap. The favicon and the home-screen icons
- * carry the same geometry on a solid badge (see public/favicon.svg).
- *
- * Filled rather than outlined on purpose: an outlined ring with a stick is
- * the magnifying-glass glyph. The holes are subpaths wound the other way
- * so the nonzero fill rule cuts them out, keeping the whole thing a plain
- * `currentColor` shape with no background color baked in. At 24 px the
- * holes merge into a mesh, which still says "padel" rather than "tennis".
+ * The mark: Material Design's `sports_tennis` glyph (Apache-2.0), the same
+ * one MUI ships as SportsTennis — a racket with a ball, in one path. Inline
+ * in `currentColor` so it takes the surrounding text color with no badge
+ * and no theme swap; the favicon and the home-screen icons carry the same
+ * glyph on a solid badge (see public/favicon.svg).
  */
 export function LogoMark({ className }: { className?: string }) {
   return (
     <svg
-      viewBox="0 0 32 32"
+      viewBox="0 0 24 24"
       aria-hidden="true"
       className={cn("shrink-0 select-none", className)}
       fill="currentColor"
     >
-      <path d="M7.4 12.2a8.6 8.6 0 1 1 17.2 0a8.6 8.6 0 1 1 -17.2 0ZM10.6 8.1a1.3 1.3 0 1 0 2.6 0a1.3 1.3 0 1 0 -2.6 0ZM14.7 8.1a1.3 1.3 0 1 0 2.6 0a1.3 1.3 0 1 0 -2.6 0ZM18.8 8.1a1.3 1.3 0 1 0 2.6 0a1.3 1.3 0 1 0 -2.6 0ZM10.6 12.2a1.3 1.3 0 1 0 2.6 0a1.3 1.3 0 1 0 -2.6 0ZM14.7 12.2a1.3 1.3 0 1 0 2.6 0a1.3 1.3 0 1 0 -2.6 0ZM18.8 12.2a1.3 1.3 0 1 0 2.6 0a1.3 1.3 0 1 0 -2.6 0ZM10.6 16.3a1.3 1.3 0 1 0 2.6 0a1.3 1.3 0 1 0 -2.6 0ZM14.7 16.3a1.3 1.3 0 1 0 2.6 0a1.3 1.3 0 1 0 -2.6 0ZM18.8 16.3a1.3 1.3 0 1 0 2.6 0a1.3 1.3 0 1 0 -2.6 0Z" />
-      <path d="M12.2 18.4L13.4 24.6H18.6L19.8 18.4Z" />
-      <rect x="13.4" y="21.6" width="5.2" height="8.2" rx="2.6" />
+      <path d="M19.52 2.49C17.18.15 12.9.62 9.97 3.55c-1.6 1.6-2.52 3.87-2.54 5.46-.02 1.58.26 3.89-1.35 5.5l-4.24 4.24 1.42 1.42 4.24-4.24c1.61-1.61 3.92-1.33 5.5-1.35s3.86-.94 5.46-2.54c2.92-2.93 3.4-7.21 1.06-9.55m-9.2 9.19c-1.53-1.53-1.05-4.61 1.06-6.72s5.18-2.59 6.72-1.06c1.53 1.53 1.05 4.61-1.06 6.72s-5.18 2.59-6.72 1.06M18 17c.53 0 1.04.21 1.41.59.78.78.78 2.05 0 2.83-.37.37-.88.58-1.41.58s-1.04-.21-1.41-.59c-.78-.78-.78-2.05 0-2.83.37-.37.88-.58 1.41-.58m0-2c-1.02 0-2.05.39-2.83 1.17-1.56 1.56-1.56 4.09 0 5.66.78.78 1.81 1.17 2.83 1.17s2.05-.39 2.83-1.17c1.56-1.56 1.56-4.09 0-5.66C20.05 15.39 19.02 15 18 15" />
     </svg>
   )
 }

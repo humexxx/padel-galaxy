@@ -60,10 +60,11 @@ export function ResponsiveDialog({
         {trigger && <SheetTrigger render={trigger} />}
         <SheetContent
           side="bottom"
-          className={cn(
-            "max-h-[92dvh] gap-0 rounded-t-2xl p-0 data-[side=bottom]:h-auto",
-            className,
-          )}
+          // Fixed height, not max-height: the sheet is anchored to the bottom,
+          // so a content-sized sheet grows *upwards* whenever the form adds a
+          // row — everything under the thumb jumps. Same reason
+          // ResponsiveCombo pins its height.
+          className={cn("h-[92dvh]! gap-0 rounded-t-2xl p-0", className)}
         >
           <SheetHeader className="border-b px-4 py-3 pr-12">
             <SheetTitle>{title}</SheetTitle>

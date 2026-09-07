@@ -12,6 +12,7 @@ import {
   sessionLabel,
   sessionStartsFromDays,
   splitClasses,
+  studentIndex,
   studentsLabel,
   timeInputValue,
   toTimestamp,
@@ -265,5 +266,26 @@ describe("formatDayHeading", () => {
     expect(formatDayHeading(at(2026, 9, 2, 18, 0), now)).not.toMatch(
       /Hoy|Mañana|Ayer/,
     )
+  })
+})
+
+describe("studentIndex", () => {
+  it("lists each student once, busiest first, ties by name", () => {
+    const records = [
+      makeClass({ id: "a", students: [{ id: "p2", name: "Pedro" }] }),
+      makeClass({
+        id: "b",
+        students: [
+          { id: "p1", name: "Juan" },
+          { id: "p2", name: "Pedro" },
+        ],
+      }),
+      makeClass({ id: "c", students: [{ id: "p3", name: "Ana" }] }),
+    ]
+    expect(studentIndex(records)).toEqual([
+      { id: "p2", name: "Pedro", count: 2 },
+      { id: "p3", name: "Ana", count: 1 },
+      { id: "p1", name: "Juan", count: 1 },
+    ])
   })
 })

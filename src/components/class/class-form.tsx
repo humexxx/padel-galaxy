@@ -151,13 +151,21 @@ export function ClassForm({ open, onOpenChange, editing }: Props) {
 
   function handleCalendarSelect(dates: Date[] | undefined) {
     const selected = (dates ?? []).map((d) => dateInputValue(d.getTime()))
-    // react-day-picker's own `max` would restart the selection from the
-    // extra day; a full package should just refuse the tap and say why.
     if (selected.length > sessionCount) {
+      // A single class (or an edit) just moves to the day that was tapped.
+      if (sessionCount === 1) {
+        setDays((curr) => {
+          const added = selected.find((d) => !curr.some((c) => c.date === d))
+          return added
+            ? [{ date: added, time: curr[0]?.time ?? suggestedTime() }]
+            : curr
+        })
+        return
+      }
+      // A full pack refuses the tap and says why — react-day-picker's own
+      // `max` would instead restart the selection from the extra day.
       toast.info(
-        sessionCount === 1
-          ? "Ya marcaste el día. Desmarcalo para elegir otro."
-          : `Ya marcaste los ${sessionCount} días. Desmarcá uno para cambiarlo.`,
+        `Ya marcaste los ${sessionCount} días. Desmarcá uno para cambiarlo.`,
       )
       return
     }
@@ -350,12 +358,16 @@ export function ClassForm({ open, onOpenChange, editing }: Props) {
                 locale={es}
                 selected={selectedDates}
                 onSelect={handleCalendarSelect}
-                min={isEdit ? 1 : undefined}
                 defaultMonth={selectedDates[0] ?? startOfToday()}
                 disabled={{ before: startOfToday() }}
                 className="[--cell-size:2.75rem] sm:[--cell-size:2.25rem]"
               />
             </div>
+            {isEdit && (
+              <FieldDescription>
+                Tocá otro día para mover la clase. La hora se ajusta abajo.
+              </FieldDescription>
+            )}
             {!isEdit && (
               <FieldDescription>
                 {remaining > 0

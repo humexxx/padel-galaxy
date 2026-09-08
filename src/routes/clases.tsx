@@ -41,6 +41,7 @@ import {
   splitClasses,
   studentIndex,
   studentsLabel,
+  type ClassDayGroup,
   type ClassRecord,
 } from "@/lib/classes"
 import { normalizeName } from "@/lib/players"
@@ -48,6 +49,13 @@ import { cn } from "@/lib/utils"
 
 type Tab = "proximas" | "historial"
 
+/**
+ * Two layouts for the same state. On a phone the filters are horizontal
+ * chip rows above the list, because that's what a thumb can reach. From
+ * `lg` up they move into a sticky sidebar as vertical lists — the width is
+ * there, and stacking chip rows across a 1000 px page just reads as
+ * clutter with the cards stretched underneath.
+ */
 export function ClasesPage() {
   const { classes, hydrated } = useClasses()
   // A minute is fine: the only thing the clock decides here is when a class
@@ -63,8 +71,8 @@ export function ClasesPage() {
     null,
   )
 
-  // Who's on the agenda — the chips. Built from every class, so a regular
-  // stays filterable from Historial once their last session has passed.
+  // Who's on the agenda. Built from every class, so a regular stays
+  // filterable from Historial once their last session has passed.
   const students = React.useMemo(() => studentIndex(classes), [classes])
 
   const filtered = React.useMemo(() => {
@@ -81,7 +89,6 @@ export function ClasesPage() {
     [filtered, now],
   )
 
-  // Day chips for the upcoming side, one per day that has a class.
   const upcomingDays = React.useMemo(() => groupByDay(upcoming), [upcoming])
   const visibleUpcoming = React.useMemo(
     () =>
@@ -91,8 +98,8 @@ export function ClasesPage() {
     [upcoming, dayFilter],
   )
 
-  // A day chip can vanish under us (class moved, taught, cancelled) — drop
-  // the filter instead of showing an empty list with no chip to clear it.
+  // A day can vanish under us (class moved, taught, cancelled) — drop the
+  // filter instead of showing an empty list with nothing to clear it.
   React.useEffect(() => {
     if (dayFilter && !upcomingDays.some((g) => g.key === dayFilter)) {
       setDayFilter(null)
@@ -100,11 +107,20 @@ export function ClasesPage() {
   }, [dayFilter, upcomingDays])
 
   const filtering = Boolean(search || studentId || dayFilter)
+  const showDays = tab === "proximas" && upcomingDays.length > 1
 
   function clearFilters() {
     setSearch("")
     setStudentId(null)
     setDayFilter(null)
+  }
+
+  function toggleStudent(id: string | null) {
+    setStudentId((curr) => (id !== null && curr === id ? null : id))
+  }
+
+  function toggleDay(key: string | null) {
+    setDayFilter((curr) => (key !== null && curr === key ? null : key))
   }
 
   function openCreate() {
@@ -148,6 +164,33 @@ export function ClasesPage() {
     )
   }
 
+  const searchBox = (
+    <div className="relative w-full">
+      <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+      <Input
+        type="search"
+        placeholder="Buscar por alumno…"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        className="h-11 pl-9 sm:h-9"
+      />
+    </div>
+  )
+
+  const exportButton = visibleUpcoming.length > 0 && (
+    <Button
+      variant="outline"
+      className="h-10 sm:h-9"
+      onClick={() => addToCalendar(visibleUpcoming)}
+    >
+      <CalendarArrowUpIcon className="size-4" />
+      Agregar al calendario
+      <span className="rounded-full bg-muted px-1.5 text-[10px] font-semibold tabular-nums">
+        {visibleUpcoming.length}
+      </span>
+    </Button>
+  )
+
   return (
     <PageContainer>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -157,153 +200,171 @@ export function ClasesPage() {
             Tu agenda de clases: elegí los alumnos, el paquete y el horario.
           </Text>
         </div>
-        <Button
-          onClick={openCreate}
-          className="h-11 w-full shrink-0 sm:h-9 sm:w-auto"
-        >
-          <CalendarPlusIcon className="size-4" />
-          Agendar clase
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          <div className="hidden lg:block">{exportButton}</div>
+          <Button
+            onClick={openCreate}
+            className="h-11 w-full sm:h-9 sm:w-auto"
+          >
+            <CalendarPlusIcon className="size-4" />
+            Agendar clase
+          </Button>
+        </div>
       </div>
 
-      {classes.length > 0 && (
-        <div className="space-y-3">
-          <div className="relative w-full sm:max-w-xs">
-            <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Buscar por alumno…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="h-11 pl-9 sm:h-9"
-            />
-          </div>
-          {students.length > 1 && (
-            <ChipRow label="Filtrar por alumno">
-              <Chip active={!studentId} onClick={() => setStudentId(null)}>
+      <div className="lg:grid lg:grid-cols-[15rem_minmax(0,1fr)] lg:items-start lg:gap-10">
+        {classes.length > 0 && (
+          <aside className="hidden lg:sticky lg:top-20 lg:block lg:max-h-[calc(100dvh-6rem)] lg:space-y-6 lg:overflow-y-auto">
+            {searchBox}
+            <SidebarSection title="Alumnos">
+              <SidebarRow active={!studentId} onClick={() => toggleStudent(null)}>
                 Todos
-              </Chip>
+              </SidebarRow>
               {students.map((s) => (
-                <Chip
+                <SidebarRow
                   key={s.id}
                   active={studentId === s.id}
-                  onClick={() =>
-                    setStudentId((curr) => (curr === s.id ? null : s.id))
-                  }
                   count={s.count}
+                  onClick={() => toggleStudent(s.id)}
                 >
                   {s.name}
-                </Chip>
+                </SidebarRow>
               ))}
-            </ChipRow>
-          )}
-        </div>
-      )}
-
-      <Tabs
-        value={tab}
-        onValueChange={(v) => setTab(v as Tab)}
-        className="space-y-4"
-      >
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="proximas" className="text-xs">
-            Próximas
-            {upcoming.length > 0 && (
-              <span className="ml-1.5 rounded-full bg-primary/10 px-1.5 text-[10px] font-semibold text-primary tabular-nums">
-                {upcoming.length}
-              </span>
+            </SidebarSection>
+            {showDays && (
+              <SidebarSection title="Días">
+                <SidebarRow active={!dayFilter} onClick={() => toggleDay(null)}>
+                  Todos
+                </SidebarRow>
+                {upcomingDays.map((g) => (
+                  <SidebarRow
+                    key={g.key}
+                    active={dayFilter === g.key}
+                    count={g.classes.length}
+                    onClick={() => toggleDay(g.key)}
+                    className="first-letter:uppercase"
+                  >
+                    {formatDayHeading(g.ts, now)}
+                  </SidebarRow>
+                ))}
+              </SidebarSection>
             )}
-          </TabsTrigger>
-          <TabsTrigger value="historial" className="text-xs">
-            Historial
-            {past.length > 0 && (
-              <span className="ml-1.5 rounded-full bg-muted px-1.5 text-[10px] font-semibold text-muted-foreground tabular-nums">
-                {past.length}
-              </span>
-            )}
-          </TabsTrigger>
-        </TabsList>
+          </aside>
+        )}
 
-        <TabsContent value="proximas" className="space-y-4">
-          {hydrated && upcoming.length === 0 ? (
-            filtering ? (
-              <FilteredEmpty onClear={clearFilters} />
-            ) : (
-              <EmptyState
-                title="No tenés clases agendadas"
-                description="Agendá la primera: elegí el alumno, el paquete (individual, de 3 o de 5) y marcá los días."
-              />
-            )
-          ) : (
-            <>
-              {upcomingDays.length > 1 && (
-                <ChipRow label="Ir a un día">
-                  <Chip active={!dayFilter} onClick={() => setDayFilter(null)}>
+        <div className={cn("space-y-4", classes.length === 0 && "lg:col-span-2")}>
+          {classes.length > 0 && (
+            <div className="space-y-3 lg:hidden">
+              {searchBox}
+              {students.length > 1 && (
+                <ChipRow label="Filtrar por alumno">
+                  <Chip active={!studentId} onClick={() => toggleStudent(null)}>
                     Todos
                   </Chip>
-                  {upcomingDays.map((g) => (
+                  {students.map((s) => (
                     <Chip
-                      key={g.key}
-                      active={dayFilter === g.key}
-                      onClick={() =>
-                        setDayFilter((curr) => (curr === g.key ? null : g.key))
-                      }
-                      count={g.classes.length}
-                      className="first-letter:uppercase"
+                      key={s.id}
+                      active={studentId === s.id}
+                      count={s.count}
+                      onClick={() => toggleStudent(s.id)}
                     >
-                      {formatDayHeading(g.ts, now)}
+                      {s.name}
                     </Chip>
                   ))}
                 </ChipRow>
               )}
-              {visibleUpcoming.length > 0 && (
-                <div className="flex justify-end">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-10 sm:h-8"
-                    onClick={() => addToCalendar(visibleUpcoming)}
-                  >
-                    <CalendarArrowUpIcon className="size-4" />
-                    Agregar al calendario
-                    <span className="rounded-full bg-muted px-1.5 text-[10px] font-semibold tabular-nums">
-                      {visibleUpcoming.length}
-                    </span>
-                  </Button>
-                </div>
-              )}
-              <DayGroups
-                records={visibleUpcoming}
-                now={now}
-                onEdit={openEdit}
-                onRequestDelete={setPendingDelete}
-                onAddToCalendar={addToCalendarFromCard}
-              />
-            </>
+            </div>
           )}
-        </TabsContent>
 
-        <TabsContent value="historial" className="space-y-4">
-          {hydrated && past.length === 0 ? (
-            filtering ? (
-              <FilteredEmpty onClear={clearFilters} />
-            ) : (
-              <EmptyState
-                title="Todavía no hay historial"
-                description="Las clases dadas, canceladas o ya pasadas van a aparecer acá."
-              />
-            )
-          ) : (
-            <DayGroups
-              records={past}
-              now={now}
-              onEdit={openEdit}
-              onRequestDelete={setPendingDelete}
-              onAddToCalendar={addToCalendarFromCard}
-            />
-          )}
-        </TabsContent>
-      </Tabs>
+          <Tabs
+            value={tab}
+            onValueChange={(v) => setTab(v as Tab)}
+            className="space-y-4"
+          >
+            <TabsList className="grid w-full grid-cols-2 lg:inline-grid lg:w-80">
+              <TabsTrigger value="proximas" className="text-xs">
+                Próximas
+                {upcoming.length > 0 && (
+                  <span className="ml-1.5 rounded-full bg-primary/10 px-1.5 text-[10px] font-semibold text-primary tabular-nums">
+                    {upcoming.length}
+                  </span>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="historial" className="text-xs">
+                Historial
+                {past.length > 0 && (
+                  <span className="ml-1.5 rounded-full bg-muted px-1.5 text-[10px] font-semibold text-muted-foreground tabular-nums">
+                    {past.length}
+                  </span>
+                )}
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="proximas" className="space-y-4">
+              {hydrated && upcoming.length === 0 ? (
+                filtering ? (
+                  <FilteredEmpty onClear={clearFilters} />
+                ) : (
+                  <EmptyState
+                    title="No tenés clases agendadas"
+                    description="Agendá la primera: elegí el alumno, el paquete (individual, de 3 o de 5) y marcá los días."
+                  />
+                )
+              ) : (
+                <>
+                  {showDays && (
+                    <ChipRow label="Ir a un día" className="lg:hidden">
+                      <Chip active={!dayFilter} onClick={() => toggleDay(null)}>
+                        Todos
+                      </Chip>
+                      {upcomingDays.map((g) => (
+                        <Chip
+                          key={g.key}
+                          active={dayFilter === g.key}
+                          count={g.classes.length}
+                          onClick={() => toggleDay(g.key)}
+                          className="first-letter:uppercase"
+                        >
+                          {formatDayHeading(g.ts, now)}
+                        </Chip>
+                      ))}
+                    </ChipRow>
+                  )}
+                  <div className="flex justify-end lg:hidden">{exportButton}</div>
+                  <DayGroups
+                    groups={groupByDay(visibleUpcoming)}
+                    now={now}
+                    onEdit={openEdit}
+                    onRequestDelete={setPendingDelete}
+                    onAddToCalendar={addToCalendarFromCard}
+                  />
+                </>
+              )}
+            </TabsContent>
+
+            <TabsContent value="historial" className="space-y-4">
+              {hydrated && past.length === 0 ? (
+                filtering ? (
+                  <FilteredEmpty onClear={clearFilters} />
+                ) : (
+                  <EmptyState
+                    title="Todavía no hay historial"
+                    description="Las clases dadas, canceladas o ya pasadas van a aparecer acá."
+                  />
+                )
+              ) : (
+                <DayGroups
+                  groups={groupByDay(past)}
+                  now={now}
+                  onEdit={openEdit}
+                  onRequestDelete={setPendingDelete}
+                  onAddToCalendar={addToCalendarFromCard}
+                />
+              )}
+            </TabsContent>
+          </Tabs>
+        </div>
+      </div>
 
       <ClassForm open={formOpen} onOpenChange={setFormOpen} editing={editing} />
       <DeleteClassDialog
@@ -314,6 +375,64 @@ export function ClasesPage() {
   )
 }
 
+function SidebarSection({
+  title,
+  children,
+}: {
+  title: string
+  children: React.ReactNode
+}) {
+  return (
+    <section className="space-y-1">
+      <h3 className="px-2.5 pb-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+        {title}
+      </h3>
+      {children}
+    </section>
+  )
+}
+
+function SidebarRow({
+  active,
+  count,
+  onClick,
+  className,
+  children,
+}: {
+  active: boolean
+  count?: number
+  onClick: () => void
+  className?: string
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        "flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-left text-sm transition-colors",
+        "focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
+        active
+          ? "bg-primary/10 font-medium text-primary"
+          : "text-muted-foreground hover:bg-muted hover:text-foreground",
+      )}
+    >
+      <span className={cn("min-w-0 truncate", className)}>{children}</span>
+      {count !== undefined && (
+        <span
+          className={cn(
+            "shrink-0 rounded-full px-1.5 text-[10px] font-semibold tabular-nums",
+            active ? "bg-primary/15" : "bg-muted",
+          )}
+        >
+          {count}
+        </span>
+      )}
+    </button>
+  )
+}
+
 /**
  * A single scrolling row of chips. Bleeds to the screen edges on phones so
  * the last chip peeks out as the hint that there are more; the scrollbar
@@ -321,16 +440,21 @@ export function ClasesPage() {
  */
 function ChipRow({
   label,
+  className,
   children,
 }: {
   label: string
+  className?: string
   children: React.ReactNode
 }) {
   return (
     <div
       role="group"
       aria-label={label}
-      className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0 [&::-webkit-scrollbar]:hidden"
+      className={cn(
+        "-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0 [&::-webkit-scrollbar]:hidden",
+        className,
+      )}
     >
       {children}
     </div>
@@ -380,20 +504,18 @@ function Chip({
 }
 
 function DayGroups({
-  records,
+  groups,
   now,
   onEdit,
   onRequestDelete,
   onAddToCalendar,
 }: {
-  records: ClassRecord[]
+  groups: ClassDayGroup[]
   now: number
   onEdit: (record: ClassRecord) => void
   onRequestDelete: (record: ClassRecord) => void
   onAddToCalendar: (record: ClassRecord, wholePackage: boolean) => void
 }) {
-  const groups = React.useMemo(() => groupByDay(records), [records])
-
   return (
     <div className="space-y-5">
       {groups.map((group) => (

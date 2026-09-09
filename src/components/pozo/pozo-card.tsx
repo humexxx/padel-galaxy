@@ -1,18 +1,11 @@
+import * as React from "react"
 import { Link } from "react-router"
 import { CalendarIcon, Trash2Icon, UsersIcon } from "lucide-react"
 import { toast } from "sonner"
 
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
+import { ResponsiveConfirm } from "@/components/ui/responsive-confirm"
 import { PozoStatusBadge } from "@/components/pozo/status-badge"
 import { formatRelative } from "@/lib/time"
 import type { Pozo } from "@/lib/pozo/types"
@@ -23,6 +16,7 @@ type Props = {
 }
 
 export function PozoCard({ pozo, onDelete }: Props) {
+  const [confirmOpen, setConfirmOpen] = React.useState(false)
   return (
     <Card className="group transition hover:border-primary/40 hover:shadow-md">
       <CardHeader className="space-y-2">
@@ -53,33 +47,36 @@ export function PozoCard({ pozo, onDelete }: Props) {
                 : "Continuar"}
           </Link>
         </Button>
-        <Dialog>
-          <DialogTrigger
-            render={<Button variant="ghost" size="icon" aria-label="Eliminar pozo" />}
-          >
-            <Trash2Icon className="size-4" />
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>¿Eliminar pozo?</DialogTitle>
-              <DialogDescription>
-                Esta acción no se puede deshacer. Se borrarán todos los partidos y resultados de
-                <span className="font-medium"> {pozo.name}</span>.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button
-                variant="destructive"
-                onClick={() => {
-                  onDelete(pozo.id)
-                  toast.success("Pozo eliminado")
-                }}
-              >
-                Eliminar
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Eliminar pozo"
+          onClick={() => setConfirmOpen(true)}
+        >
+          <Trash2Icon className="size-4" />
+        </Button>
+        <ResponsiveConfirm
+          open={confirmOpen}
+          onOpenChange={setConfirmOpen}
+          title="¿Eliminar pozo?"
+          description={
+            <>
+              Esta acción no se puede deshacer. Se borrarán todos los partidos y
+              resultados de <span className="font-medium">{pozo.name}</span>.
+            </>
+          }
+          actions={[
+            {
+              label: "Eliminar pozo",
+              destructive: true,
+              onSelect: () => {
+                setConfirmOpen(false)
+                onDelete(pozo.id)
+                toast.success("Pozo eliminado")
+              },
+            },
+          ]}
+        />
       </CardFooter>
     </Card>
   )

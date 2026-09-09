@@ -446,7 +446,7 @@ export function PozoForm() {
                     type="button"
                     size="icon"
                     variant="ghost"
-                    className="size-9"
+                    className="size-11 sm:size-9"
                     onClick={() => removeSlot(i)}
                     aria-label={`Quitar jugador ${i + 1}`}
                     disabled={slots.length <= MIN_PLAYERS || submitting}

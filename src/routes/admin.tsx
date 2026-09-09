@@ -2,7 +2,6 @@ import * as React from "react"
 import {
   Loader2Icon,
   MailIcon,
-  SearchIcon,
   SendIcon,
   ShieldCheckIcon,
   ShieldPlusIcon,
@@ -21,17 +20,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { ResponsiveConfirm } from "@/components/ui/responsive-confirm"
+import { SearchField } from "@/components/ui/search-field"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import {
@@ -265,7 +257,7 @@ function PendingInvitesCard() {
 
 function InvitesTable({ invites }: { invites: AdminInvite[] }) {
   return (
-    <div className="overflow-hidden border-t">
+    <div className="overflow-x-auto border-t">
       <Table>
         <TableHeader>
           <TableRow>
@@ -316,7 +308,7 @@ function RevokeInviteButton({ invite }: { invite: AdminInvite }) {
       aria-label={`Revocar invitación a ${invite.emailDisplay}`}
     >
       <XIcon className="size-3.5" />
-      Revocar
+      <span className="hidden sm:inline">Revocar</span>
     </Button>
   )
 }
@@ -376,7 +368,7 @@ function AdminsTable({ admins }: { admins: UserProfile[] }) {
   }, [admins])
 
   return (
-    <div className="overflow-hidden border-t">
+    <div className="overflow-x-auto border-t">
       <Table>
         <TableHeader>
           <TableRow>
@@ -462,49 +454,38 @@ function DemoteAdminButton({
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={
-          <Button variant="ghost" size="sm" disabled={disabled}>
-            <Trash2Icon className="size-3.5" />
-            Revocar
-          </Button>
-        }
-      />
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>¿Revocar rol de admin?</DialogTitle>
-          <DialogDescription>
+    <>
+      <Button
+        variant="ghost"
+        size="sm"
+        disabled={disabled}
+        onClick={() => setOpen(true)}
+        aria-label={`Revocar admin a ${user.displayName || user.email}`}
+      >
+        <Trash2Icon className="size-3.5" />
+        <span className="hidden sm:inline">Revocar</span>
+      </Button>
+      <ResponsiveConfirm
+        open={open}
+        onOpenChange={setOpen}
+        title="¿Revocar rol de admin?"
+        description={
+          <>
             <span className="font-medium">{user.displayName || user.email}</span>{" "}
             pasa a ser <strong>jugador</strong> normal. Pierde acceso a crear
             pozos, jugadores y grupos. Se puede volver a invitar después.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => setOpen(false)}
-            disabled={working}
-          >
-            Cancelar
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={handleDemote}
-            disabled={working}
-          >
-            {working ? (
-              <>
-                <Loader2Icon className="size-4 animate-spin" />
-                Revocando…
-              </>
-            ) : (
-              "Revocar admin"
-            )}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          </>
+        }
+        busy={working}
+        actions={[
+          {
+            label: working ? "Revocando…" : "Revocar admin",
+            destructive: true,
+            onSelect: handleDemote,
+          },
+        ]}
+      />
+    </>
   )
 }
 
@@ -560,17 +541,12 @@ function ClientesCard() {
         ) : (
           <>
             <div className="px-6 pb-4">
-              <div className="relative">
-                <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  type="search"
-                  placeholder="Buscar por nombre o email…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-9"
-                  aria-label="Buscar cliente"
-                />
-              </div>
+              <SearchField
+              placeholder="Buscar por nombre o email…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              aria-label="Buscar cliente"
+            />
             </div>
             {filtered.length === 0 ? (
               <div className="px-6 pb-6 text-center">
@@ -590,7 +566,7 @@ function ClientesCard() {
 
 function ClientesTable({ clientes }: { clientes: UserProfile[] }) {
   return (
-    <div className="overflow-hidden border-t">
+    <div className="overflow-x-auto border-t">
       <Table>
         <TableHeader>
           <TableRow>

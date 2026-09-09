@@ -95,7 +95,7 @@ export function PlayerCombobox({
       type="button"
       disabled={disabled}
       className={cn(
-        "flex h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-sm transition-colors",
+        "flex h-11 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-sm transition-colors sm:h-9",
         "hover:bg-accent/40",
         "focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:border-ring",
         "disabled:cursor-not-allowed disabled:opacity-50",

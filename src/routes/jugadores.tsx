@@ -5,12 +5,11 @@ import {
   CheckCircle2Icon,
   ClockIcon,
   MailIcon,
-  SearchIcon,
   UserIcon,
 } from "lucide-react"
 
 import { Card, CardContent } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
+import { SearchField } from "@/components/ui/search-field"
 import {
   Table,
   TableBody,
@@ -67,16 +66,11 @@ export function JugadoresPage() {
       <Card>
         <CardContent className="space-y-4 py-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="relative w-full sm:max-w-xs">
-              <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                type="search"
-                placeholder="Buscar por nombre…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9"
-              />
-            </div>
+            <SearchField
+              placeholder="Buscar por nombre…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)} className="w-full sm:max-w-xs"
+            />
             <Tabs
               value={statusFilter}
               onValueChange={(v) => setStatusFilter(v as StatusFilter)}
@@ -113,7 +107,7 @@ function PlayersTable({ players }: { players: PlayerRecord[] }) {
             <TableHead className="pl-4">Jugador</TableHead>
             <TableHead>Estado</TableHead>
             <TableHead className="hidden sm:table-cell">Email</TableHead>
-            <TableHead className="pr-4 text-right">Ver</TableHead>
+            <TableHead className="hidden pr-4 text-right sm:table-cell">Ver</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -122,9 +116,11 @@ function PlayersTable({ players }: { players: PlayerRecord[] }) {
             return (
               <TableRow key={p.id}>
                 <TableCell className="pl-4 font-medium">
+                  {/* The name is the row's tap target on phones (the "Ver"
+                      column is hidden there), so it fills 44 px. */}
                   <Link
                     to={`/jugadores/${p.id}`}
-                    className="inline-flex items-center gap-2 hover:underline"
+                    className="flex min-h-11 items-center gap-2 hover:underline sm:inline-flex sm:min-h-0"
                   >
                     <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
                       <UserIcon className="size-3.5" />
@@ -138,7 +134,7 @@ function PlayersTable({ players }: { players: PlayerRecord[] }) {
                 <TableCell className="hidden truncate text-muted-foreground sm:table-cell">
                   {p.invitedEmail ?? "—"}
                 </TableCell>
-                <TableCell className="pr-4 text-right">
+                <TableCell className="hidden pr-4 text-right sm:table-cell">
                   <Link
                     to={`/jugadores/${p.id}`}
                     className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"

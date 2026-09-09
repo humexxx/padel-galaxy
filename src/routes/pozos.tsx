@@ -4,7 +4,6 @@ import {
   ArrowRightIcon,
   FolderIcon,
   PlusIcon,
-  SearchIcon,
   TrophyIcon,
 } from "lucide-react"
 import { collection, doc } from "firebase/firestore"
@@ -23,6 +22,7 @@ import {
 } from "@/components/ui/dialog"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { SearchField } from "@/components/ui/search-field"
 import {
   Table,
   TableBody,
@@ -194,16 +194,11 @@ function GroupsSection({ isAdmin }: { isAdmin: boolean }) {
     return (
       <div className="space-y-4">
         {groups.length > 4 && (
-          <div className="relative w-full sm:max-w-xs">
-            <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              type="search"
+          <SearchField
               placeholder="Buscar por nombre…"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
+              onChange={(e) => setSearch(e.target.value)} className="w-full sm:max-w-xs"
             />
-          </div>
         )}
         {hydrated && filtered.length === 0 ? (
           <Text variant="muted" className="text-sm">
@@ -224,16 +219,11 @@ function GroupsSection({ isAdmin }: { isAdmin: boolean }) {
     <Card>
       <div className="space-y-4 py-4">
         <div className="flex flex-col gap-2 px-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative w-full sm:max-w-xs">
-            <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              type="search"
+          <SearchField
               placeholder="Buscar por nombre…"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
+              onChange={(e) => setSearch(e.target.value)} className="w-full sm:max-w-xs"
             />
-          </div>
           <CreateGroupDialog existingGroups={groups} />
         </div>
 
@@ -310,7 +300,7 @@ function GroupsTable({ groups }: { groups: GroupRecord[] }) {
             <TableHead className="pl-4">Nombre</TableHead>
             <TableHead className="hidden sm:table-cell">Creador</TableHead>
             <TableHead className="hidden md:table-cell">Creado</TableHead>
-            <TableHead className="pr-4 text-right">Ver</TableHead>
+            <TableHead className="hidden pr-4 text-right sm:table-cell">Ver</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -319,7 +309,7 @@ function GroupsTable({ groups }: { groups: GroupRecord[] }) {
               <TableCell className="pl-4 font-medium">
                 <Link
                   to={`/pozos/grupos/${g.id}`}
-                  className="inline-flex items-center gap-2 hover:underline"
+                  className="flex min-h-11 items-center gap-2 hover:underline sm:inline-flex sm:min-h-0"
                 >
                   <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
                     <FolderIcon className="size-3.5" />
@@ -337,7 +327,7 @@ function GroupsTable({ groups }: { groups: GroupRecord[] }) {
                   year: "numeric",
                 })}
               </TableCell>
-              <TableCell className="pr-4 text-right">
+              <TableCell className="hidden pr-4 text-right sm:table-cell">
                 <Link
                   to={`/pozos/grupos/${g.id}`}
                   className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"

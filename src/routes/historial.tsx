@@ -4,7 +4,6 @@ import {
   ArrowRightIcon,
   ClockIcon,
   FolderIcon,
-  SearchIcon,
   Trash2Icon,
   TrophyIcon,
 } from "lucide-react"
@@ -12,16 +11,8 @@ import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
+import { ResponsiveConfirm } from "@/components/ui/responsive-confirm"
+import { SearchField } from "@/components/ui/search-field"
 import {
   Select,
   SelectContent,
@@ -171,16 +162,11 @@ export function HistorialPage() {
         <CardContent className="space-y-4 py-4">
           {/* Top row: search + date range (most-used filters). */}
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="relative w-full sm:max-w-xs">
-              <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                type="search"
-                placeholder="Buscar por pozo o grupo…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9"
-              />
-            </div>
+            <SearchField
+              placeholder="Buscar por pozo o grupo…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)} className="w-full sm:max-w-xs"
+            />
             <Tabs value={range} onValueChange={(v) => setRange(v as RangeKey)}>
               <TabsList className="grid w-full grid-cols-4 sm:w-auto">
                 {(Object.keys(RANGE_LABELS) as RangeKey[]).map((r) => (
@@ -362,36 +348,40 @@ function DeleteButton({
   pozo: Pozo
   onDelete: (id: string) => void
 }) {
+  const [open, setOpen] = React.useState(false)
   return (
-    <Dialog>
-      <DialogTrigger
-        render={
-          <Button variant="ghost" size="icon" aria-label={`Eliminar ${pozo.name}`} />
-        }
+    <>
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label={`Eliminar ${pozo.name}`}
+        onClick={() => setOpen(true)}
       >
         <Trash2Icon className="size-4" />
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>¿Eliminar pozo?</DialogTitle>
-          <DialogDescription>
-            Esta acción no se puede deshacer. Se borrarán todos los partidos y resultados de
-            <span className="font-medium"> {pozo.name}</span>.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button
-            variant="destructive"
-            onClick={() => {
+      </Button>
+      <ResponsiveConfirm
+        open={open}
+        onOpenChange={setOpen}
+        title="¿Eliminar pozo?"
+        description={
+          <>
+            Esta acción no se puede deshacer. Se borrarán todos los partidos y
+            resultados de <span className="font-medium">{pozo.name}</span>.
+          </>
+        }
+        actions={[
+          {
+            label: "Eliminar pozo",
+            destructive: true,
+            onSelect: () => {
+              setOpen(false)
               onDelete(pozo.id)
               toast.success("Pozo eliminado")
-            }}
-          >
-            Eliminar
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            },
+          },
+        ]}
+      />
+    </>
   )
 }
 

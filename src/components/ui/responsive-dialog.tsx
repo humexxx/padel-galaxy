@@ -13,6 +13,7 @@ import {
   Sheet,
   SheetContent,
   SheetDescription,
+  SheetGrabber,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
@@ -64,9 +65,10 @@ export function ResponsiveDialog({
           // so a content-sized sheet grows *upwards* whenever the form adds a
           // row — everything under the thumb jumps. Same reason
           // ResponsiveCombo pins its height.
-          className={cn("h-[92dvh]! gap-0 rounded-t-2xl p-0", className)}
+          className={cn("h-[92dvh]! gap-0 rounded-t-3xl p-0", className)}
         >
-          <SheetHeader className="border-b px-4 py-3 pr-12">
+          <SheetGrabber />
+          <SheetHeader className="border-b px-4 pt-1 pb-3 pr-12">
             <SheetTitle>{title}</SheetTitle>
             {description && <SheetDescription>{description}</SheetDescription>}
           </SheetHeader>

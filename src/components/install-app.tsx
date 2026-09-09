@@ -232,7 +232,7 @@ export function InstallAppBanner() {
       <div
         // sm:hidden — above this width the header button is visible and a
         // banner would just be a second ask for the same thing.
-        className="fixed inset-x-3 bottom-3 z-50 flex items-center gap-3 rounded-xl border bg-background/95 p-3 shadow-lg backdrop-blur sm:hidden"
+        className="fixed inset-x-3 bottom-[calc(3.25rem+env(safe-area-inset-bottom)+0.75rem)] z-50 flex items-center gap-3 rounded-2xl border bg-background/95 p-3 shadow-lg backdrop-blur sm:hidden"
         role="region"
         aria-label="Instalar la app"
       >

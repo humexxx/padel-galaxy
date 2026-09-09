@@ -18,12 +18,20 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Heading, Text } from "@/components/ui/typography"
 import { PageContainer } from "@/components/page-container"
 import { ClassCard } from "@/components/class/class-card"
 import { ClassForm } from "@/components/class/class-form"
 import { useClasses } from "@/hooks/use-classes"
+import { useIsMobile } from "@/hooks/use-media-query"
 import { useNow } from "@/hooks/use-now"
 import {
   buildClassesIcs,
@@ -172,7 +180,7 @@ export function ClasesPage() {
         placeholder="Buscar por alumno…"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        className="h-11 pl-9 sm:h-9"
+        className="h-11 rounded-xl border-transparent bg-muted pl-9 shadow-none focus-visible:bg-background sm:h-9 dark:bg-muted dark:focus-visible:bg-background"
       />
     </div>
   )
@@ -484,7 +492,7 @@ function Chip({
         "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
         active
           ? "border-primary bg-primary text-primary-foreground"
-          : "border-input bg-background text-muted-foreground hover:bg-muted hover:text-foreground",
+          : "border-transparent bg-muted text-muted-foreground hover:text-foreground",
         className,
       )}
     >
@@ -592,6 +600,7 @@ function DeleteClassDialog({
   }, [record])
   const target = record ?? shown
   const isPack = (target?.sessionCount ?? 1) > 1
+  const isMobile = useIsMobile()
 
   async function run(action: () => Promise<unknown>, message: string) {
     setBusy(true)
@@ -607,23 +616,77 @@ function DeleteClassDialog({
     }
   }
 
+  const summary = target && (
+    <>
+      Clase de <span className="font-medium">{studentsLabel(target.students)}</span>
+      {sessionLabel(target) ? ` · ${sessionLabel(target)}` : ""}. Esta acción no
+      se puede deshacer.
+    </>
+  )
+
+  // On a phone a destructive choice is an action sheet: the options rise
+  // from the bottom as one grouped card, red for what deletes, and
+  // "Cancelar" stands apart in its own card so it can't be hit by mistake.
+  if (isMobile) {
+    return (
+      <Sheet open={Boolean(record)} onOpenChange={(open) => !open && onClose()}>
+        <SheetContent
+          side="bottom"
+          showCloseButton={false}
+          className="gap-2 border-0 bg-transparent p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] shadow-none"
+        >
+          <div className="overflow-hidden rounded-2xl bg-popover">
+            <SheetHeader className="items-center gap-1 border-b px-6 py-3 text-center">
+              <SheetTitle className="text-[13px] font-semibold text-muted-foreground">
+                ¿Eliminar clase?
+              </SheetTitle>
+              <SheetDescription className="text-[13px]">{summary}</SheetDescription>
+            </SheetHeader>
+            <Button
+              variant="ghost"
+              className="h-14 w-full rounded-none text-[17px] font-normal text-destructive hover:text-destructive"
+              disabled={busy || !target}
+              onClick={() =>
+                target && run(() => deleteClass(target.id), "Clase eliminada")
+              }
+            >
+              Eliminar esta clase
+            </Button>
+            {isPack && target && (
+              <Button
+                variant="ghost"
+                className="h-14 w-full rounded-none border-t text-[17px] font-normal text-destructive hover:text-destructive"
+                disabled={busy}
+                onClick={() =>
+                  run(
+                    () => deleteClassPackage(target.packageId),
+                    "Paquete eliminado",
+                  )
+                }
+              >
+                Eliminar el paquete completo ({target.sessionCount} clases)
+              </Button>
+            )}
+          </div>
+          <Button
+            variant="ghost"
+            className="h-14 w-full rounded-2xl bg-popover text-[17px] font-semibold text-primary hover:text-primary"
+            disabled={busy}
+            onClick={onClose}
+          >
+            Cancelar
+          </Button>
+        </SheetContent>
+      </Sheet>
+    )
+  }
+
   return (
     <Dialog open={Boolean(record)} onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>¿Eliminar clase?</DialogTitle>
-          <DialogDescription>
-            {target && (
-              <>
-                Clase de{" "}
-                <span className="font-medium">
-                  {studentsLabel(target.students)}
-                </span>
-                {sessionLabel(target) ? ` · ${sessionLabel(target)}` : ""}. Esta
-                acción no se puede deshacer.
-              </>
-            )}
-          </DialogDescription>
+          <DialogDescription>{summary}</DialogDescription>
         </DialogHeader>
         {/* Plain `flex-col` in both directions: the footer's default
             `flex-col-reverse` would flip these three into the opposite of

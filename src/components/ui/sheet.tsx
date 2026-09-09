@@ -78,6 +78,21 @@ function SheetContent({
   )
 }
 
+/** The pill at the top of a bottom sheet: iOS's cue that it swipes away. */
+function SheetGrabber({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="sheet-grabber"
+      aria-hidden="true"
+      className={cn(
+        "mx-auto mt-2.5 h-[5px] w-9 shrink-0 rounded-full bg-muted-foreground/30",
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
 function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -129,6 +144,7 @@ export {
   SheetTrigger,
   SheetClose,
   SheetContent,
+  SheetGrabber,
   SheetHeader,
   SheetFooter,
   SheetTitle,

@@ -8,6 +8,7 @@ import {
 import {
   Sheet,
   SheetContent,
+  SheetGrabber,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
@@ -59,9 +60,10 @@ export function ResponsiveCombo({
           // h-[85dvh]! beats the side=bottom h-auto default; a tall fixed
           // height keeps the search input near the top of the screen so
           // the soft keyboard never covers it.
-          className="h-[85dvh]! gap-0 rounded-t-2xl p-0 pb-[env(safe-area-inset-bottom)]"
+          className="h-[85dvh]! gap-0 rounded-t-3xl p-0 pb-[env(safe-area-inset-bottom)]"
         >
-          <SheetHeader className="border-b px-4 py-3">
+          <SheetGrabber />
+          <SheetHeader className="border-b px-4 pt-1 pb-3">
             <SheetTitle className="text-sm">{title}</SheetTitle>
           </SheetHeader>
           <div

@@ -2,7 +2,9 @@ import * as React from "react"
 import {
   CalendarArrowUpIcon,
   CalendarPlusIcon,
+  CheckIcon,
   GraduationCapIcon,
+  SlidersHorizontalIcon,
   XIcon,
 } from "lucide-react"
 import { toast } from "sonner"
@@ -10,6 +12,13 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { ResponsiveConfirm, type ConfirmAction } from "@/components/ui/responsive-confirm"
 import { SearchField } from "@/components/ui/search-field"
+import {
+  Sheet,
+  SheetContent,
+  SheetGrabber,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Heading, Text } from "@/components/ui/typography"
 import { PageContainer } from "@/components/page-container"
@@ -35,6 +44,7 @@ import {
   studentsLabel,
   type ClassDayGroup,
   type ClassRecord,
+  type StudentSummary,
 } from "@/lib/classes"
 import { normalizeName } from "@/lib/players"
 import { cn } from "@/lib/utils"
@@ -42,11 +52,11 @@ import { cn } from "@/lib/utils"
 type Tab = "proximas" | "historial"
 
 /**
- * Two layouts for the same state. On a phone the filters are horizontal
- * chip rows above the list, because that's what a thumb can reach. From
- * `lg` up they move into a sticky sidebar as vertical lists — the width is
- * there, and stacking chip rows across a 1000 px page just reads as
- * clutter with the cards stretched underneath.
+ * Two layouts for the same state. On a phone the controls collapse into one
+ * toolbar row (search, a Filtros button that opens a sheet, export) plus a
+ * date strip like the Calendar app's — five stacked rows of chips pushed
+ * the first class below the fold. From `lg` up the same filters sit in a
+ * sticky sidebar as vertical lists, where the width is there to use.
  */
 export function ClasesPage() {
   const { classes, hydrated } = useClasses()
@@ -62,6 +72,7 @@ export function ClasesPage() {
   const [pendingDelete, setPendingDelete] = React.useState<ClassRecord | null>(
     null,
   )
+  const [filtersOpen, setFiltersOpen] = React.useState(false)
 
   // Who's on the agenda. Built from every class, so a regular stays
   // filterable from Historial once their last session has passed.
@@ -241,24 +252,41 @@ export function ClasesPage() {
 
         <div className={cn("space-y-4", classes.length === 0 && "lg:col-span-2")}>
           {classes.length > 0 && (
-            <div className="space-y-3 lg:hidden">
-              {searchBox}
+            <div className="flex items-center gap-2 lg:hidden">
+              <SearchField
+                placeholder="Buscar por alumno…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="min-w-0 flex-1"
+              />
               {students.length > 1 && (
-                <ChipRow label="Filtrar por alumno">
-                  <Chip active={!studentId} onClick={() => toggleStudent(null)}>
-                    Todos
-                  </Chip>
-                  {students.map((s) => (
-                    <Chip
-                      key={s.id}
-                      active={studentId === s.id}
-                      count={s.count}
-                      onClick={() => toggleStudent(s.id)}
-                    >
-                      {s.name}
-                    </Chip>
-                  ))}
-                </ChipRow>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  aria-label={
+                    studentId ? "Filtros (1 activo)" : "Filtrar por alumno"
+                  }
+                  className="relative shrink-0"
+                  onClick={() => setFiltersOpen(true)}
+                >
+                  <SlidersHorizontalIcon className="size-4" />
+                  {studentId && (
+                    <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                      1
+                    </span>
+                  )}
+                </Button>
+              )}
+              {tab === "proximas" && visibleUpcoming.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  aria-label={`Agregar ${visibleUpcoming.length} clases al calendario`}
+                  className="shrink-0"
+                  onClick={() => addToCalendar(visibleUpcoming)}
+                >
+                  <CalendarArrowUpIcon className="size-4" />
+                </Button>
               )}
             </div>
           )}
@@ -300,24 +328,13 @@ export function ClasesPage() {
               ) : (
                 <>
                   {showDays && (
-                    <ChipRow label="Ir a un día" className="lg:hidden">
-                      <Chip active={!dayFilter} onClick={() => toggleDay(null)}>
-                        Todos
-                      </Chip>
-                      {upcomingDays.map((g) => (
-                        <Chip
-                          key={g.key}
-                          active={dayFilter === g.key}
-                          count={g.classes.length}
-                          onClick={() => toggleDay(g.key)}
-                          className="first-letter:uppercase"
-                        >
-                          {formatDayHeading(g.ts, now)}
-                        </Chip>
-                      ))}
-                    </ChipRow>
+                    <DayStrip
+                      groups={upcomingDays}
+                      active={dayFilter}
+                      now={now}
+                      onSelect={toggleDay}
+                    />
                   )}
-                  <div className="flex justify-end lg:hidden">{exportButton}</div>
                   <DayGroups
                     groups={groupByDay(visibleUpcoming)}
                     now={now}
@@ -354,6 +371,16 @@ export function ClasesPage() {
       </div>
 
       <ClassForm open={formOpen} onOpenChange={setFormOpen} editing={editing} />
+      <FilterSheet
+        open={filtersOpen}
+        onOpenChange={setFiltersOpen}
+        students={students}
+        studentId={studentId}
+        onSelect={(id) => {
+          toggleStudent(id)
+          setFiltersOpen(false)
+        }}
+      />
       <DeleteClassDialog
         record={pendingDelete}
         onClose={() => setPendingDelete(null)}
@@ -421,71 +448,206 @@ function SidebarRow({
 }
 
 /**
- * A single scrolling row of chips. Bleeds to the screen edges on phones so
- * the last chip peeks out as the hint that there are more; the scrollbar
- * is hidden because it would sit on top of the chips.
+ * The phone's day picker, drawn the way Calendar and Fitness draw a week:
+ * weekday over a big day number, the class count underneath, today ringed.
+ * Only days that have a class appear — it's a "jump to" strip, not a
+ * month view — and it scrolls edge to edge so the last cell peeks out.
  */
-function ChipRow({
-  label,
-  className,
-  children,
+function DayStrip({
+  groups,
+  active,
+  now,
+  onSelect,
 }: {
-  label: string
-  className?: string
-  children: React.ReactNode
+  groups: ClassDayGroup[]
+  active: string | null
+  now: number
+  onSelect: (key: string | null) => void
 }) {
+  const total = groups.reduce((n, g) => n + g.classes.length, 0)
   return (
     <div
       role="group"
-      aria-label={label}
-      className={cn(
-        "-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0 [&::-webkit-scrollbar]:hidden",
-        className,
-      )}
+      aria-label="Ir a un día"
+      className="-mx-4 flex snap-x gap-2 overflow-x-auto px-4 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] lg:hidden [&::-webkit-scrollbar]:hidden"
     >
-      {children}
+      <DayCell
+        label="Todo"
+        value={total}
+        sub={total === 1 ? "clase" : "clases"}
+        active={active === null}
+        onClick={() => onSelect(null)}
+        ariaLabel={`Todos los días, ${total} clases`}
+      />
+      {groups.map((g) => {
+        const d = new Date(g.ts)
+        const count = g.classes.length
+        return (
+          <DayCell
+            key={g.key}
+            label={d
+              .toLocaleDateString("es-AR", { weekday: "short" })
+              .replace(".", "")}
+            value={d.getDate()}
+            sub={`${count} ${count === 1 ? "clase" : "clases"}`}
+            today={dayKey(g.ts) === dayKey(now)}
+            active={active === g.key}
+            onClick={() => onSelect(g.key)}
+            ariaLabel={`${formatDayHeading(g.ts, now)}, ${count} ${count === 1 ? "clase" : "clases"}`}
+          />
+        )
+      })}
     </div>
   )
 }
 
-function Chip({
+function DayCell({
+  label,
+  value,
+  sub,
+  today,
   active,
-  count,
   onClick,
-  className,
-  children,
+  ariaLabel,
 }: {
+  label: string
+  value: number
+  sub: string
+  today?: boolean
   active: boolean
-  count?: number
   onClick: () => void
-  className?: string
-  children: React.ReactNode
+  ariaLabel: string
 }) {
   return (
     <button
       type="button"
       aria-pressed={active}
+      aria-label={ariaLabel}
       onClick={onClick}
       className={cn(
-        "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium whitespace-nowrap transition-colors sm:h-8",
-        "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
+        "flex w-16 shrink-0 snap-start flex-col items-center gap-0.5 rounded-2xl py-2 transition-colors",
+        "focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
         active
-          ? "border-primary bg-primary text-primary-foreground"
-          : "border-transparent bg-muted text-muted-foreground hover:text-foreground",
-        className,
+          ? "bg-primary text-primary-foreground"
+          : "bg-muted text-foreground hover:bg-muted/70",
+        today && !active && "ring-2 ring-primary/50 ring-inset",
       )}
     >
-      {children}
-      {count !== undefined && (
-        <span
-          className={cn(
-            "rounded-full px-1.5 text-[10px] font-semibold tabular-nums",
-            active ? "bg-primary-foreground/20" : "bg-muted",
+      <span
+        className={cn(
+          "text-[10px] font-semibold tracking-wide uppercase",
+          active ? "text-primary-foreground/80" : "text-muted-foreground",
+          today && !active && "text-primary",
+        )}
+      >
+        {label}
+      </span>
+      <span className="text-lg leading-none font-semibold tabular-nums">
+        {value}
+      </span>
+      <span
+        className={cn(
+          "text-[10px] tabular-nums",
+          active ? "text-primary-foreground/80" : "text-muted-foreground",
+        )}
+      >
+        {sub}
+      </span>
+    </button>
+  )
+}
+
+/**
+ * Filters on a phone live behind the toolbar's Filtros button, in a sheet:
+ * a single-choice list with the check on the right, the way iOS settings
+ * pick one of several. Choosing applies and closes; Limpiar resets.
+ */
+function FilterSheet({
+  open,
+  onOpenChange,
+  students,
+  studentId,
+  onSelect,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  students: StudentSummary[]
+  studentId: string | null
+  onSelect: (id: string | null) => void
+}) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="bottom"
+        showCloseButton={false}
+        className="max-h-[80dvh] gap-0 rounded-t-3xl p-0"
+      >
+        <SheetGrabber />
+        <SheetHeader className="flex-row items-center justify-between border-b px-4 pt-1 pb-3">
+          <SheetTitle>Filtrar por alumno</SheetTitle>
+          {studentId && (
+            <Button variant="ghost" size="sm" onClick={() => onSelect(null)}>
+              Limpiar
+            </Button>
           )}
-        >
+        </SheetHeader>
+        <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-2">
+          <FilterRow active={!studentId} onClick={() => onSelect(null)}>
+            Todos los alumnos
+          </FilterRow>
+          {students.map((s) => (
+            <FilterRow
+              key={s.id}
+              active={studentId === s.id}
+              count={s.count}
+              onClick={() => onSelect(s.id)}
+            >
+              {s.name}
+            </FilterRow>
+          ))}
+        </div>
+        <div className="border-t p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+          <Button className="w-full" onClick={() => onOpenChange(false)}>
+            Listo
+          </Button>
+        </div>
+      </SheetContent>
+    </Sheet>
+  )
+}
+
+function FilterRow({
+  active,
+  count,
+  onClick,
+  children,
+}: {
+  active: boolean
+  count?: number
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={active}
+      onClick={onClick}
+      className={cn(
+        "flex h-12 w-full items-center gap-3 rounded-xl px-3 text-left text-[15px] transition-colors",
+        "focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
+        active ? "bg-primary/10 font-medium text-primary" : "hover:bg-muted",
+      )}
+    >
+      <span className="min-w-0 flex-1 truncate">{children}</span>
+      {count !== undefined && (
+        <span className="rounded-full bg-muted px-1.5 text-[11px] font-semibold text-muted-foreground tabular-nums">
           {count}
         </span>
       )}
+      <CheckIcon
+        className={cn("size-4 shrink-0", active ? "opacity-100" : "opacity-0")}
+      />
     </button>
   )
 }

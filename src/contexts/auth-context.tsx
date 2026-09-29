@@ -4,6 +4,7 @@ import {
   createUserWithEmailAndPassword,
   getAdditionalUserInfo,
   onIdTokenChanged,
+  sendEmailVerification,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut as fbSignOut,
@@ -37,6 +38,13 @@ export type AuthState = {
   /** The user's role from their `/users/{uid}` doc, or null while loading. */
   role: UserRole | null
   loading: boolean
+  /**
+   * True while a signed-in user's role is still unknown — no admin claim
+   * and the profile doc hasn't arrived. Admins promoted through an invite
+   * have no claim, so role-gated screens must wait on this rather than
+   * on `loading` or they flash "Acceso restringido".
+   */
+  roleLoading: boolean
   signInWithEmail: (email: string, password: string) => Promise<void>
   signUpWithEmail: (email: string, password: string, displayName?: string) => Promise<void>
   signInWithGoogle: () => Promise<void>
@@ -54,6 +62,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [claimAdmin, setClaimAdmin] = React.useState(false)
   const [claimSuperAdmin, setClaimSuperAdmin] = React.useState(false)
   const [docRole, setDocRole] = React.useState<UserRole | null>(null)
+  // uid whose profile snapshot has arrived; compared against the current
+  // user so a stale value can't count for the next account.
+  const [profileLoadedFor, setProfileLoadedFor] = React.useState<string | null>(null)
   const [loading, setLoading] = React.useState(true)
 
   // Listen to auth state. On every sign-in we also call ensureUserProfile —
@@ -77,10 +88,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           uid: next.uid,
           email: next.email ?? "",
           displayName: next.displayName ?? "",
-          // Passed through so deriveInitialRole can avoid trying to create
-          // a doc with role='admin' for an unverified email — the firestore
-          // rule would reject it and we'd land in a no-doc-no-role state.
-          emailVerified: next.emailVerified,
+          // From the token, not `next.emailVerified`: the rules compare the
+          // mirrored value against the token claim, and right after a user
+          // verifies the two can disagree until the token refreshes.
+          emailVerified: token.claims.email_verified === true,
           claims,
         }).catch((err) => console.error("ensureUserProfile failed:", err))
       } else {
@@ -101,8 +112,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setDocRole(null)
       return
     }
-    const unsub = subscribeUserProfile(user.uid, (profile) => {
+    const uid = user.uid
+    const unsub = subscribeUserProfile(uid, (profile) => {
       setDocRole(profile?.role ?? null)
+      setProfileLoadedFor(uid)
     })
     return unsub
   }, [user])
@@ -134,6 +147,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
       if (displayName) await updateProfile(cred.user, { displayName })
+      // Invites only link to a verified address, so an email/password
+      // account has to prove it owns the inbox. Google accounts arrive
+      // verified. Non-fatal: the in-app banner offers a resend.
+      await sendEmailVerification(cred.user, {
+        url: `${window.location.origin}/pozos`,
+      }).catch((err) => console.error("sendEmailVerification failed:", err))
     },
     [],
   )
@@ -141,10 +160,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signInWithGoogle = React.useCallback(async () => {
     const provider = new GoogleAuthProvider()
     provider.setCustomParameters({ prompt: "select_account" })
-    const settings = await getAppSettings()
+    // The popup opens first, synchronously inside the click: Safari blocks
+    // popups that open after an awaited network call.
     const cred = await signInWithPopup(auth, provider)
     const info = getAdditionalUserInfo(cred)
-    if (info?.isNewUser && !settings.signupsEnabled) {
+    if (!info?.isNewUser) return
+    const settings = await getAppSettings()
+    if (!settings.signupsEnabled) {
       // Last-chance check: this email might have an admin or player invite.
       // If neither, roll back the freshly-created Auth user.
       const allowed = await hasAnyInvite(cred.user.email ?? "")
@@ -169,6 +191,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const role: UserRole | null = docRole ?? (
     claimSuperAdmin ? "superadmin" : claimAdmin ? "admin" : null
   )
+  const roleLoading =
+    user !== null &&
+    !claimAdmin &&
+    !claimSuperAdmin &&
+    profileLoadedFor !== user.uid
 
   const value = React.useMemo<AuthState>(
     () => ({
@@ -177,6 +204,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isSuperAdmin,
       role,
       loading,
+      roleLoading,
       signInWithEmail,
       signUpWithEmail,
       signInWithGoogle,
@@ -189,6 +217,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isSuperAdmin,
       role,
       loading,
+      roleLoading,
       signInWithEmail,
       signUpWithEmail,
       signInWithGoogle,

@@ -65,6 +65,9 @@ export type UserProfile = {
   /** Mirrored from Firebase Auth — denormalized so we can render lists
    *  and query by email without going through Admin SDK. Always lowercased. */
   email: string
+  /** Mirrored from the ID token's `email_verified` claim (the rules check
+   *  it matches). Missing on profiles written before it was mirrored. */
+  emailVerified?: boolean
   displayName: string
   preferredSide: PreferredSide
   role: UserRole
@@ -181,6 +184,7 @@ export async function ensureUserProfile(args: {
       // drifted (e.g. user changed displayName in Google).
       const patch: Record<string, unknown> = {}
       if (data.email !== email) patch.email = email
+      if (data.emailVerified !== emailVerified) patch.emailVerified = emailVerified
       if (displayName && data.displayName !== displayName) patch.displayName = displayName
       if (Object.keys(patch).length > 0) {
         patch.updatedAt = now
@@ -190,6 +194,16 @@ export async function ensureUserProfile(args: {
         // the value really changed), so we don't write unnecessarily.
         if (patch.displayName) {
           await syncLinkedPlayerName(uid, displayName)
+        }
+      }
+      // An invited admin who registered before verifying their email was
+      // created as 'player'. Once verified, take the role the invite grants.
+      if (data.role === "player" && emailVerified) {
+        const invite = await findInvite(email).catch(() => null)
+        if (invite) {
+          await updateDoc(ref, { role: "admin", updatedAt: Date.now() })
+          await consumeAdminInviteIfAny(email)
+          return "admin"
         }
       }
       // Always try to link an unlinked invited-player record — even if the
@@ -205,10 +219,6 @@ export async function ensureUserProfile(args: {
         email,
         role: data.role,
       })
-      // NOTE: we don't auto-promote a player-role user even if an admin
-      // invite is pending for their email — the /users update rule rejects
-      // a self-update that changes role. The superadmin promotes them
-      // directly from /admin (InviteAdminCard detects the existing user).
       return data.role
     }
     // Old-schema doc → backfill role.
@@ -216,6 +226,7 @@ export async function ensureUserProfile(args: {
     await updateDoc(ref, {
       role: derived,
       email,
+      emailVerified,
       // Don't clobber a user-edited displayName; only fill if missing.
       ...(data.displayName ? {} : { displayName }),
       updatedAt: now,
@@ -236,6 +247,7 @@ export async function ensureUserProfile(args: {
   const profile: UserProfile = {
     uid,
     email,
+    emailVerified,
     displayName: displayName || email.split("@")[0],
     preferredSide: "any",
     role,

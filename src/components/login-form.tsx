@@ -4,7 +4,7 @@ import { toast } from "sonner"
 import { FirebaseError } from "firebase/app"
 import { EyeIcon, EyeOffIcon, Loader2Icon } from "lucide-react"
 
-import { cn } from "@/lib/utils"
+import { cn, safeNextPath } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
@@ -57,8 +57,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"form">)
   const [googleLoading, setGoogleLoading] = React.useState(false)
 
   function goNext() {
-    const next = searchParams.get("next")
-    navigate(next && next.startsWith("/") ? next : "/pozos", { replace: true })
+    navigate(safeNextPath(searchParams.get("next")) ?? "/pozos", { replace: true })
   }
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {

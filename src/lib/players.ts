@@ -109,11 +109,21 @@ export function subscribeMyPlayer(
   const q = query(collection(db, COLLECTION), where("linkedUid", "==", uid))
   return onSnapshot(
     q,
-    (snap) => {
-      onData(snap.empty ? null : (snap.docs[0].data() as PlayerRecord))
-    },
+    (snap) => onData(pickMyPlayer(snap.docs.map((d) => d.data() as PlayerRecord), uid)),
     onError,
   )
+}
+
+/**
+ * Someone who signed up before an organizer's invite reached them ends up
+ * linked to two records: their self-created one and the organizer's. The
+ * organizer's is the one pozos point at, so it's the profile worth showing.
+ */
+export function pickMyPlayer(
+  linked: PlayerRecord[],
+  uid: string,
+): PlayerRecord | null {
+  return linked.find((p) => p.ownerId !== uid) ?? linked[0] ?? null
 }
 
 /**

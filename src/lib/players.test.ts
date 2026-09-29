@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 
-import { findPlayerByName, normalizeName, type PlayerRecord } from "./players"
+import { findPlayerByName, normalizeName, pickMyPlayer, type PlayerRecord } from "./players"
 
 function makePlayer(name: string, overrides: Partial<PlayerRecord> = {}): PlayerRecord {
   return {
@@ -110,5 +110,30 @@ describe("findPlayerByName", () => {
       makePlayer("ana", { id: "second" }),
     ]
     expect(findPlayerByName(dupes, "Ana")?.id).toBe("first")
+  })
+})
+
+describe("pickMyPlayer", () => {
+  function rec(id: string, ownerId: string): PlayerRecord {
+    return {
+      id,
+      ownerId,
+      name: id,
+      nameLower: id,
+      linkedUid: "me",
+      invitedEmail: null,
+      invitedAt: null,
+      createdAt: 0,
+      updatedAt: 0,
+    }
+  }
+
+  it("prefers the organizer's record over the self-created one", () => {
+    expect(pickMyPlayer([rec("self", "me"), rec("org", "coach")], "me")?.id).toBe("org")
+  })
+
+  it("falls back to the only record, or null", () => {
+    expect(pickMyPlayer([rec("self", "me")], "me")?.id).toBe("self")
+    expect(pickMyPlayer([], "me")).toBeNull()
   })
 })

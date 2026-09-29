@@ -94,14 +94,19 @@ export async function sendPlayerInvite(input: {
  * by the sign-up flow to (a) decide whether to bypass the global signups
  * toggle and (b) link the newly created user to the player record.
  *
- * Returns the FIRST match — if multiple organizers invited the same email
- * we just pick one (rare edge case; could be revisited later by returning
- * a list and letting the user pick).
+ * Only unclaimed records count. A user's own self-signup record also
+ * carries their email in `invitedEmail`, and without the `linkedUid`
+ * filter it could come back first and hide the organizer's invite.
+ * If several organizers invited the same email, the first one wins.
  */
 export async function findInvitedPlayer(email: string): Promise<PlayerRecord | null> {
   const e = normalizeEmail(email)
   if (!e || !e.includes("@")) return null
-  const q = query(collection(db, "players"), where("invitedEmail", "==", e))
+  const q = query(
+    collection(db, "players"),
+    where("invitedEmail", "==", e),
+    where("linkedUid", "==", null),
+  )
   const snap = await getDocs(q)
   if (snap.empty) return null
   return snap.docs[0].data() as PlayerRecord

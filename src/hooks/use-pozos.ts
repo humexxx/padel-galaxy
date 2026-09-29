@@ -4,6 +4,7 @@ import { toast } from "sonner"
 import { useAuth } from "@/contexts/auth-context"
 import {
   savePozo,
+  subscribeActivePozos,
   subscribeAllPozos,
   subscribeParticipantPozos,
   subscribePozo,
@@ -11,7 +12,11 @@ import {
 } from "@/lib/storage"
 import type { Pozo } from "@/lib/pozo/types"
 
-export function usePozos() {
+/**
+ * `activeOnly` is a hint, not a filter: it only narrows the super-admin's
+ * system-wide query. Callers that care still check `status` themselves.
+ */
+export function usePozos({ activeOnly = false }: { activeOnly?: boolean } = {}) {
   const { user, isSuperAdmin } = useAuth()
   const [pozos, setPozos] = React.useState<Pozo[]>([])
   const [hydrated, setHydrated] = React.useState(false)
@@ -27,11 +32,17 @@ export function usePozos() {
     // Super-admin sees every pozo in the system — single broad query, no
     // need to also pull "participant" pozos since `all` already covers them.
     if (isSuperAdmin) {
-      const unsub = subscribeAllPozos((list) => {
-        setPozos(list)
-        setHydrated(true)
-      })
-      return unsub
+      const subscribe = activeOnly ? subscribeActivePozos : subscribeAllPozos
+      return subscribe(
+        (list) => {
+          setPozos(list)
+          setHydrated(true)
+        },
+        (err) => {
+          console.error("usePozos subscription error:", err)
+          setHydrated(true)
+        },
+      )
     }
 
     // Everyone else gets the union of "pozos I own" + "pozos I'm a linked
@@ -86,7 +97,7 @@ export function usePozos() {
       unsubOwned()
       unsubParticipant()
     }
-  }, [user, isSuperAdmin])
+  }, [user, isSuperAdmin, activeOnly])
 
   return { pozos, hydrated }
 }

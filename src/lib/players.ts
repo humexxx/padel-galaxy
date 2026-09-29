@@ -1,6 +1,5 @@
 import {
   collection,
-  deleteDoc,
   doc,
   getDocs,
   onSnapshot,
@@ -209,10 +208,6 @@ export async function updatePlayer(
     next.nameLower = normalizeName(patch.name)
   }
   await updateDoc(playerDoc(id), next)
-}
-
-export async function deletePlayer(id: string): Promise<void> {
-  await deleteDoc(playerDoc(id))
 }
 
 /**

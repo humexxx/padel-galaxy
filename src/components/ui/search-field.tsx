@@ -19,6 +19,7 @@ export function SearchField({
       <Input
         type="search"
         className="rounded-xl border-transparent bg-muted pl-9 shadow-none focus-visible:bg-background dark:bg-muted dark:focus-visible:bg-background"
+        aria-label={props.placeholder?.replace(/…$/, "")}
         {...props}
       />
     </div>

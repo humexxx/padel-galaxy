@@ -29,7 +29,6 @@ vi.mock("@/contexts/auth-context", () => ({
     signUpWithEmail: vi.fn(),
     signInWithGoogle: vi.fn(),
     signOut: vi.fn(),
-    refreshClaims: vi.fn(),
   }),
 }))
 

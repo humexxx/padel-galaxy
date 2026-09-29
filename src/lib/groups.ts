@@ -1,7 +1,6 @@
 import {
   arrayUnion,
   collection,
-  deleteDoc,
   doc,
   onSnapshot,
   orderBy,
@@ -165,21 +164,6 @@ export async function createGroup({
     _createdAtServer: serverTimestamp(),
   })
   return record
-}
-
-export async function updateGroup(
-  id: string,
-  patch: Partial<Omit<GroupRecord, "id" | "ownerId" | "createdAt">>,
-): Promise<void> {
-  const next: Record<string, unknown> = { ...patch, updatedAt: Date.now() }
-  if (typeof patch.name === "string") {
-    next.nameLower = normalizeName(patch.name)
-  }
-  await updateDoc(groupDoc(id), next)
-}
-
-export async function deleteGroup(id: string): Promise<void> {
-  await deleteDoc(groupDoc(id))
 }
 
 export function findGroupByName(

@@ -84,6 +84,27 @@ export function subscribeAllPozos(
   )
 }
 
+/**
+ * Super-admin nav badge: only pozos still in progress, so the layout
+ * doesn't pull every finished pozo in the system on each page.
+ */
+export function subscribeActivePozos(
+  onData: (pozos: Pozo[]) => void,
+  onError?: (err: Error) => void,
+): Unsubscribe {
+  const q = query(
+    collection(db, COLLECTION),
+    where("status", "in", ["draft", "warmup", "playing"]),
+  )
+  return onSnapshot(
+    q,
+    (snap) => {
+      onData(snap.docs.map((d) => d.data() as Pozo))
+    },
+    onError,
+  )
+}
+
 export function subscribePozo(
   id: string,
   onData: (pozo: Pozo | null) => void,

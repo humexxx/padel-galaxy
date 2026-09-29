@@ -172,11 +172,11 @@ export function PozoTimer({
               ? "text-amber-600 dark:text-amber-400"
               : "text-emerald-600 dark:text-emerald-400",
         )}
-        aria-live="polite"
+        role="timer"
       >
         {formatDuration(remaining)}
       </motion.p>
-      <p className="mt-2 text-xs text-muted-foreground">
+      <p className="mt-2 text-xs text-muted-foreground" aria-live="polite">
         {ended ? "Tiempo terminado" : "Tiempo restante"}
       </p>
       {ringing && (

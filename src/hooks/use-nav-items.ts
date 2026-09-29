@@ -33,7 +33,7 @@ export type NavItem = {
 export function useNavItems(): NavItem[] {
   const location = useLocation()
   const { isAdmin, isSuperAdmin } = useAuth()
-  const { pozos } = usePozos()
+  const { pozos } = usePozos({ activeOnly: true })
   // Admins own the roster but aren't in it, so this is null for them and
   // they get the full "Jugadores" list instead of "Jugador".
   const { player: myPlayer } = useMyPlayer()

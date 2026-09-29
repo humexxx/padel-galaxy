@@ -49,7 +49,6 @@ export type AuthState = {
   signUpWithEmail: (email: string, password: string, displayName?: string) => Promise<void>
   signInWithGoogle: () => Promise<void>
   signOut: () => Promise<void>
-  refreshClaims: () => Promise<void>
 }
 
 const AuthContext = React.createContext<AuthState | null>(null)
@@ -119,13 +118,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })
     return unsub
   }, [user])
-
-  const refreshClaims = React.useCallback(async () => {
-    if (!auth.currentUser) return
-    const token = await auth.currentUser.getIdTokenResult(true)
-    setClaimAdmin(token.claims.admin === true)
-    setClaimSuperAdmin(token.claims.superadmin === true)
-  }, [])
 
   const signInWithEmail = React.useCallback(async (email: string, password: string) => {
     await signInWithEmailAndPassword(auth, email, password)
@@ -209,7 +201,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signUpWithEmail,
       signInWithGoogle,
       signOut,
-      refreshClaims,
     }),
     [
       user,
@@ -222,7 +213,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signUpWithEmail,
       signInWithGoogle,
       signOut,
-      refreshClaims,
     ],
   )
 

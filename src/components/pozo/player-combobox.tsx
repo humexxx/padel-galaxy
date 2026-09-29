@@ -37,6 +37,10 @@ type Props = {
    *  from suggestions so the user can't pick the same person twice. */
   excludeIds?: ReadonlySet<string>
   placeholder?: string
+  /** When set, "Crear" stays available unless the typed name matches one
+   *  of THIS owner's players — a namesake in another organizer's roster
+   *  is a different person. */
+  ownerId?: string
   /** Optional aria-label, e.g. "Jugador 1". */
   label?: string
   disabled?: boolean
@@ -49,6 +53,7 @@ export function PlayerCombobox({
   recentIds,
   excludeIds,
   placeholder = "Buscar o crear…",
+  ownerId,
   label,
   disabled,
 }: Props) {
@@ -66,8 +71,9 @@ export function PlayerCombobox({
   // If yes, hide the "create" affordance — picking the existing one is right.
   const typedMatchesExisting = React.useMemo(() => {
     if (!search.trim()) return false
-    return findPlayerByName(suggestions, search) !== undefined
-  }, [suggestions, search])
+    const pool = ownerId ? suggestions.filter((p) => p.ownerId === ownerId) : suggestions
+    return findPlayerByName(pool, search) !== undefined
+  }, [suggestions, search, ownerId])
 
   const showCreate = search.trim().length > 0 && !typedMatchesExisting
 

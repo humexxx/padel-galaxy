@@ -527,6 +527,9 @@ function AppearanceSection() {
  * Pozos/players/groups owned by this user are NOT cascaded — that needs a
  * Cloud Function (onAuthDelete) for atomicity + admin permissions.
  */
+/** Firebase requires a sign-in within ~5 minutes to delete a login. */
+const RECENT_LOGIN_MS = 4 * 60 * 1000
+
 function PrivacySection({
   email,
   onAfterDelete,
@@ -545,6 +548,16 @@ function PrivacySection({
 
   async function handleDelete() {
     if (!user || !canDelete) return
+    // Firebase only deletes a login that signed in within the last few
+    // minutes. Check first: deleting the profile and then failing on the
+    // login would leave an account that comes back as a plain player (an
+    // admin who got the role from an invite would lose it).
+    const lastSignIn = Date.parse(user.metadata.lastSignInTime ?? "")
+    if (!(Date.now() - lastSignIn < RECENT_LOGIN_MS)) {
+      setOpen(false)
+      await onRequiresRecentLogin()
+      return
+    }
     setDeleting(true)
     try {
       await deleteUserProfile(user.uid)

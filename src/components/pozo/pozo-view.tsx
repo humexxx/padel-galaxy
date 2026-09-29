@@ -22,13 +22,14 @@ import { useGroups } from "@/hooks/use-groups"
 import { Button } from "@/components/ui/button"
 import {
   Command,
+  CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { ResponsiveCombo } from "@/components/ui/responsive-combo"
 import { Card, CardContent } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -60,6 +61,8 @@ import {
 } from "@/lib/pozo/factory"
 import { computeStandings, sortStandings, type StandingsSort } from "@/lib/pozo/standings"
 import type { Match, Pozo } from "@/lib/pozo/types"
+import { syncGroupParticipants } from "@/lib/groups"
+import { normalizeName } from "@/lib/players"
 
 type UpdaterFn = (current: Pozo) => Pozo
 
@@ -117,6 +120,20 @@ export function PozoView({ pozo, onUpdate }: Props) {
     [onUpdate],
   )
 
+  // Moving a pozo into a group has to carry its linked players into the
+  // group's participants too, or they keep reading the pozo but lose the
+  // group (Grupos tab, the Historial group column, the group page).
+  function changeGroup(groupId: string | undefined) {
+    onUpdate((p) => ({ ...p, groupId }))
+    const linked = pozo.linkedUids ?? []
+    if (groupId && linked.length > 0) {
+      syncGroupParticipants(groupId, linked).catch((err) =>
+        console.error("group participants sync failed:", err),
+      )
+    }
+  }
+  const onChangeGroup = canEdit ? changeGroup : undefined
+
   if (pozo.status === "draft") {
     return (
       <PozoDraftView
@@ -124,11 +141,7 @@ export function PozoView({ pozo, onUpdate }: Props) {
         canEdit={canEdit}
         onStart={() => onUpdate((p) => startPozo(p))}
         onBack={() => navigate("/pozos")}
-        onChangeGroup={
-          canEdit
-            ? (groupId) => onUpdate((p) => ({ ...p, groupId }))
-            : undefined
-        }
+        onChangeGroup={onChangeGroup}
       />
     )
   }
@@ -138,11 +151,7 @@ export function PozoView({ pozo, onUpdate }: Props) {
       <FinishedView
         pozo={pozo}
         onBack={() => navigate("/pozos")}
-        onChangeGroup={
-          canEdit
-            ? (groupId) => onUpdate((p) => ({ ...p, groupId }))
-            : undefined
-        }
+        onChangeGroup={onChangeGroup}
       />
     )
   }
@@ -182,17 +191,13 @@ export function PozoView({ pozo, onUpdate }: Props) {
     })
   }
 
-  function handleChangeGroup(groupId: string | undefined) {
-    onUpdate((p) => ({ ...p, groupId }))
-  }
-
   return (
     <PageContainer>
       <PozoHeader
         pozo={pozo}
         onFinish={handleFinishEarly}
         showFinish={canEdit}
-        onChangeGroup={canEdit ? handleChangeGroup : undefined}
+        onChangeGroup={onChangeGroup}
       />
 
       {/* Single timer instance: keep it mounted across warmup → play so
@@ -667,48 +672,64 @@ function GroupBadge({
   onChange: (groupId: string | undefined) => void
 }) {
   const [open, setOpen] = React.useState(false)
+  const [search, setSearch] = React.useState("")
   const { groups } = useGroups()
   const current = groupId ? groups.find((g) => g.id === groupId) : null
+  const filtered = React.useMemo(() => {
+    const q = normalizeName(search)
+    return q ? groups.filter((g) => g.nameLower.includes(q)) : groups
+  }, [groups, search])
+
+  function handleOpenChange(next: boolean) {
+    setOpen(next)
+    if (!next) setSearch("")
+  }
 
   function pick(nextId: string | undefined) {
-    if (nextId === (groupId ?? undefined)) {
-      setOpen(false)
-      return
-    }
+    handleOpenChange(false)
+    if (nextId === (groupId ?? undefined)) return
     onChange(nextId)
     toast.success(nextId ? "Grupo actualizado" : "Pozo sin grupo")
-    setOpen(false)
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        render={
-          <button
-            type="button"
-            aria-label="Cambiar grupo"
-            className="inline-flex items-center gap-1 rounded-full border border-dashed border-border bg-background px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
-          />
-        }
-      >
-        <FolderIcon className="size-3" />
-        <span className="truncate">{current?.name ?? "Sin grupo"}</span>
-        <ChevronDownIcon className="size-3" />
-      </PopoverTrigger>
-      <PopoverContent className="w-56 p-0" align="start" sideOffset={4}>
-        <Command shouldFilter={false}>
-          <CommandInput placeholder="Buscar grupo…" />
-          <CommandList>
+    <ResponsiveCombo
+      open={open}
+      onOpenChange={handleOpenChange}
+      title="Grupo del pozo"
+      popoverClassName="w-64"
+      trigger={
+        <button
+          type="button"
+          aria-label={`Cambiar grupo (${current?.name ?? "sin grupo"})`}
+          className="inline-flex min-h-9 items-center gap-1 rounded-full border border-dashed border-border bg-background px-3 text-xs text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground sm:min-h-0 sm:px-2 sm:py-0.5"
+        >
+          <FolderIcon className="size-3" />
+          <span className="truncate">{current?.name ?? "Sin grupo"}</span>
+          <ChevronDownIcon className="size-3" />
+        </button>
+      }
+    >
+      <Command shouldFilter={false}>
+        <CommandInput
+          value={search}
+          onValueChange={setSearch}
+          placeholder="Buscar grupo…"
+        />
+        <CommandList>
+          {!search && (
             <CommandGroup>
               <CommandItem value="__none__" onSelect={() => pick(undefined)}>
                 <span className="text-muted-foreground">Sin grupo</span>
                 {!groupId && <CheckIcon className="ml-auto size-3.5" />}
               </CommandItem>
             </CommandGroup>
-            {groups.length > 0 && <CommandSeparator />}
-            {groups.length > 0 && (
-              <CommandGroup heading="Tus grupos">
-                {groups.map((g) => (
+          )}
+          {filtered.length > 0 ? (
+            <>
+              {!search && <CommandSeparator />}
+              <CommandGroup heading="Grupos">
+                {filtered.map((g) => (
                   <CommandItem key={g.id} value={g.id} onSelect={() => pick(g.id)}>
                     <FolderIcon className="size-4 text-muted-foreground" />
                     <span className="truncate">{g.name}</span>
@@ -716,10 +737,12 @@ function GroupBadge({
                   </CommandItem>
                 ))}
               </CommandGroup>
-            )}
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+            </>
+          ) : (
+            search && <CommandEmpty>Ningún grupo coincide.</CommandEmpty>
+          )}
+        </CommandList>
+      </Command>
+    </ResponsiveCombo>
   )
 }

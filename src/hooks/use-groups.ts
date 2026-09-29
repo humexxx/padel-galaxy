@@ -9,7 +9,7 @@ import {
 } from "@/lib/groups"
 
 export function useGroups() {
-  const { user, isSuperAdmin } = useAuth()
+  const { user, isAdmin } = useAuth()
   const [groups, setGroups] = React.useState<GroupRecord[]>([])
   const [hydrated, setHydrated] = React.useState(false)
 
@@ -21,9 +21,10 @@ export function useGroups() {
     }
     setHydrated(false)
 
-    // Super-admin sees every group in the system via a single broad
-    // query — rules already allow `isAdmin` reads on any /groups doc.
-    if (isSuperAdmin) {
+    // Admins see every group, the same way they see every player: groups
+    // are labels the organizers share, and an admin opening a colleague's
+    // pozo has to see (and keep) its group. Rules allow `isAdmin` reads.
+    if (isAdmin) {
       const unsub = subscribeAllGroups((list) => {
         setGroups(list)
         setHydrated(true)
@@ -89,7 +90,7 @@ export function useGroups() {
       unsubOwned()
       unsubParticipant()
     }
-  }, [user, isSuperAdmin])
+  }, [user, isAdmin])
 
   return { groups, hydrated }
 }

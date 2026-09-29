@@ -1,8 +1,8 @@
 import * as React from "react"
+import { toast } from "sonner"
 
 import { useAuth } from "@/contexts/auth-context"
 import {
-  removePozo,
   savePozo,
   subscribeAllPozos,
   subscribeParticipantPozos,
@@ -88,15 +88,7 @@ export function usePozos() {
     }
   }, [user, isSuperAdmin])
 
-  const save = React.useCallback((pozo: Pozo) => {
-    void savePozo(pozo)
-  }, [])
-
-  const remove = React.useCallback((id: string) => {
-    void removePozo(id)
-  }, [])
-
-  return { pozos, hydrated, save, remove }
+  return { pozos, hydrated }
 }
 
 export function usePozo(id: string | undefined) {
@@ -118,11 +110,22 @@ export function usePozo(id: string | undefined) {
       return
     }
     setHydrated(false)
-    const unsub = subscribePozo(id, (p) => {
-      pozoRef.current = p
-      setPozo(p)
-      setHydrated(true)
-    })
+    const unsub = subscribePozo(
+      id,
+      (p) => {
+        pozoRef.current = p
+        setPozo(p)
+        setHydrated(true)
+      },
+      (err) => {
+        // Denied (not yours, or deleted) reads as "not found" rather than
+        // leaving the page on its loading state forever.
+        console.error("usePozo subscription error:", err)
+        pozoRef.current = null
+        setPozo(null)
+        setHydrated(true)
+      },
+    )
     return unsub
   }, [id, user])
 
@@ -135,7 +138,12 @@ export function usePozo(id: string | undefined) {
     if (!latest) return
     const next = updater(latest)
     pozoRef.current = next
-    void savePozo(next)
+    // Offline the write just waits in the queue; a rejection means the
+    // server refused it (permissions), which the user needs to know.
+    savePozo(next).catch((err) => {
+      console.error("savePozo failed:", err)
+      toast.error("No se pudo guardar el cambio en el pozo")
+    })
   }, [])
 
   return { pozo, hydrated, update }

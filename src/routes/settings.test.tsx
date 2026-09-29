@@ -13,6 +13,8 @@ const mockUser = {
   displayName: "Owner",
   email: "owner@example.com",
   reload: vi.fn(async () => undefined),
+  // Deleting a login needs a recent sign-in; tests adjust this per case.
+  metadata: { lastSignInTime: new Date().toUTCString() as string | undefined },
 }
 
 const mockSignOut = vi.fn(async () => undefined)
@@ -240,5 +242,21 @@ describe("<SettingsPage />", () => {
     // After successful delete, we sign out + navigate to /login.
     await waitFor(() => expect(mockSignOut).toHaveBeenCalled())
     expect(mockNavigate).toHaveBeenCalledWith("/login", { replace: true })
+  })
+
+  it("Privacy: with a stale sign-in, nothing is deleted and the user re-authenticates", async () => {
+    mockUser.metadata.lastSignInTime = new Date(Date.now() - 60 * 60 * 1000).toUTCString()
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(screen.getByRole("button", { name: /^Privacidad$/i }))
+    await user.click(screen.getByRole("button", { name: /^Eliminar cuenta$/i }))
+    await user.type(screen.getByPlaceholderText(/owner@example\.com/i), "owner@example.com")
+    await user.click(await screen.findByRole("button", { name: /Eliminar definitivamente/i }))
+
+    await waitFor(() => expect(mockSignOut).toHaveBeenCalled())
+    expect(deleteUserProfileMock).not.toHaveBeenCalled()
+    expect(deleteUserAuthMock).not.toHaveBeenCalled()
+    expect(mockNavigate).toHaveBeenCalledWith("/login", { replace: true })
+    mockUser.metadata.lastSignInTime = new Date().toUTCString()
   })
 })

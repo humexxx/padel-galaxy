@@ -4,14 +4,12 @@ import {
   ArrowRightIcon,
   ClockIcon,
   FolderIcon,
-  Trash2Icon,
   TrophyIcon,
 } from "lucide-react"
-import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { ResponsiveConfirm } from "@/components/ui/responsive-confirm"
+import { DeletePozoButton } from "@/components/pozo/delete-pozo-button"
 import { SearchField } from "@/components/ui/search-field"
 import {
   Select,
@@ -89,7 +87,7 @@ function matchesSize(playerCount: number, key: SizeKey): boolean {
 }
 
 export function HistorialPage() {
-  const { pozos, hydrated, remove } = usePozos()
+  const { pozos, hydrated } = usePozos()
   const { groups } = useGroups()
   const { isAdmin } = useAuth()
 
@@ -234,11 +232,7 @@ export function HistorialPage() {
           ) : filtered.length === 0 ? (
             <NoMatchesHint onReset={filtersActive ? resetFilters : undefined} />
           ) : (
-            <HistorialTable
-              pozos={filtered}
-              groupsById={groupsById}
-              onDelete={remove}
-            />
+            <HistorialTable pozos={filtered} groupsById={groupsById} />
           )}
         </CardContent>
       </Card>
@@ -249,11 +243,9 @@ export function HistorialPage() {
 function HistorialTable({
   pozos,
   groupsById,
-  onDelete,
 }: {
   pozos: Pozo[]
   groupsById: Map<string, string>
-  onDelete: (id: string) => void
 }) {
   return (
     <div className="-mx-4 overflow-hidden border-y sm:mx-0 sm:rounded-md sm:border">
@@ -318,7 +310,7 @@ function HistorialTable({
                         <ArrowRightIcon className="size-3" />
                       </Link>
                     </Button>
-                    <DeleteButton pozo={p} onDelete={onDelete} />
+                    <DeletePozoButton pozo={p} />
                   </div>
                 </TableCell>
               </TableRow>
@@ -339,50 +331,6 @@ function getWinner(pozo: Pozo): string | null {
   const standings = computeStandings(pozo.players, pozo.matches)
   const sorted = sortStandings(standings, "games", pozo.matches)
   return sorted[0]?.player.name ?? null
-}
-
-function DeleteButton({
-  pozo,
-  onDelete,
-}: {
-  pozo: Pozo
-  onDelete: (id: string) => void
-}) {
-  const [open, setOpen] = React.useState(false)
-  return (
-    <>
-      <Button
-        variant="ghost"
-        size="icon"
-        aria-label={`Eliminar ${pozo.name}`}
-        onClick={() => setOpen(true)}
-      >
-        <Trash2Icon className="size-4" />
-      </Button>
-      <ResponsiveConfirm
-        open={open}
-        onOpenChange={setOpen}
-        title="¿Eliminar pozo?"
-        description={
-          <>
-            Esta acción no se puede deshacer. Se borrarán todos los partidos y
-            resultados de <span className="font-medium">{pozo.name}</span>.
-          </>
-        }
-        actions={[
-          {
-            label: "Eliminar pozo",
-            destructive: true,
-            onSelect: () => {
-              setOpen(false)
-              onDelete(pozo.id)
-              toast.success("Pozo eliminado")
-            },
-          },
-        ]}
-      />
-    </>
-  )
 }
 
 function SkeletonTable() {

@@ -47,7 +47,7 @@ import { cn } from "@/lib/utils"
 type Tab = "pozos" | "grupos"
 
 export function PozosPage() {
-  const { pozos, hydrated, remove } = usePozos()
+  const { pozos, hydrated } = usePozos()
   const { isAdmin } = useAuth()
   // Organizers land here after login, which makes it the reliable moment to
   // repair pozos whose players linked their account after creation.
@@ -84,7 +84,7 @@ export function PozosPage() {
               {isAdmin && <CreatePozoCard />}
               {hydrated &&
                 active.map((p) => (
-                  <PozoCard key={p.id} pozo={p} onDelete={remove} />
+                  <PozoCard key={p.id} pozo={p} />
                 ))}
             </div>
           )}

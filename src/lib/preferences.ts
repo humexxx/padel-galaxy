@@ -8,15 +8,27 @@ import * as React from "react"
 function createBoolPref(key: string, defaultValue: boolean) {
   const listeners = new Set<() => void>()
 
+  // Storage can throw (blocked site data, some private modes). A preference
+  // must never take the app down with it: fall back to the default and keep
+  // the in-memory value for this session.
+  let memory: boolean | null = null
+
   function read(): boolean {
     if (typeof window === "undefined") return defaultValue
-    const raw = window.localStorage.getItem(key)
-    if (raw === null) return defaultValue
-    return raw === "1"
+    try {
+      const raw = window.localStorage.getItem(key)
+      return raw === null ? defaultValue : raw === "1"
+    } catch {
+      return memory ?? defaultValue
+    }
   }
 
   function set(value: boolean): void {
-    window.localStorage.setItem(key, value ? "1" : "0")
+    try {
+      window.localStorage.setItem(key, value ? "1" : "0")
+    } catch {
+      memory = value
+    }
     listeners.forEach((l) => l())
   }
 

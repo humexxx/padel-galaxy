@@ -1,22 +1,14 @@
-import * as React from "react"
 import { Link } from "react-router"
-import { CalendarIcon, Trash2Icon, UsersIcon } from "lucide-react"
-import { toast } from "sonner"
+import { CalendarIcon, UsersIcon } from "lucide-react"
 
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { ResponsiveConfirm } from "@/components/ui/responsive-confirm"
+import { DeletePozoButton } from "@/components/pozo/delete-pozo-button"
 import { PozoStatusBadge } from "@/components/pozo/status-badge"
 import { formatRelative } from "@/lib/time"
 import type { Pozo } from "@/lib/pozo/types"
 
-type Props = {
-  pozo: Pozo
-  onDelete: (id: string) => void
-}
-
-export function PozoCard({ pozo, onDelete }: Props) {
-  const [confirmOpen, setConfirmOpen] = React.useState(false)
+export function PozoCard({ pozo }: { pozo: Pozo }) {
   return (
     <Card className="group transition hover:border-primary/40 hover:shadow-md">
       <CardHeader className="space-y-2">
@@ -47,36 +39,7 @@ export function PozoCard({ pozo, onDelete }: Props) {
                 : "Continuar"}
           </Link>
         </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Eliminar pozo"
-          onClick={() => setConfirmOpen(true)}
-        >
-          <Trash2Icon className="size-4" />
-        </Button>
-        <ResponsiveConfirm
-          open={confirmOpen}
-          onOpenChange={setConfirmOpen}
-          title="¿Eliminar pozo?"
-          description={
-            <>
-              Esta acción no se puede deshacer. Se borrarán todos los partidos y
-              resultados de <span className="font-medium">{pozo.name}</span>.
-            </>
-          }
-          actions={[
-            {
-              label: "Eliminar pozo",
-              destructive: true,
-              onSelect: () => {
-                setConfirmOpen(false)
-                onDelete(pozo.id)
-                toast.success("Pozo eliminado")
-              },
-            },
-          ]}
-        />
+        <DeletePozoButton pozo={pozo} />
       </CardFooter>
     </Card>
   )

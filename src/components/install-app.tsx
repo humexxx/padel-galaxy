@@ -229,6 +229,9 @@ export function InstallAppBanner() {
 
   return (
     <>
+      {/* The banner floats over the page; this spacer extends the page by
+          its height so the last content can scroll clear of it. */}
+      <div aria-hidden className="h-24 sm:hidden" />
       <div
         // sm:hidden — above this width the header button is visible and a
         // banner would just be a second ask for the same thing.

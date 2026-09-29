@@ -251,10 +251,14 @@ export function PozoForm() {
       // Resolve every slot to a real Firestore player id, either by reusing
       // an existing record (matched by id OR by normalized name fallback)
       // or by creating a fresh player document on the fly.
+      // A typed (not picked) name only reuses a player from *your* roster:
+      // the full roster spans every organizer, and another club's "Juan
+      // Pérez" would carry his account and stats into this pozo.
+      const ownRoster = roster.filter((r) => r.ownerId === user.uid)
       const resolved = await Promise.all(
         filledSlots.map(async (slot) => {
           if (slot.id) return { id: slot.id, name: slot.name.trim() }
-          const existing = findPlayerByName(roster, slot.name)
+          const existing = findPlayerByName(ownRoster, slot.name)
           if (existing) return { id: existing.id, name: existing.name }
           const newId = doc(collection(db, "players")).id
           await createPlayer({ id: newId, ownerId: user.uid, name: slot.name })
@@ -432,6 +436,7 @@ export function PozoForm() {
                   </span>
                   <div className="flex-1">
                     <PlayerCombobox
+                  ownerId={user?.uid}
                       value={slot}
                       onChange={(next) => updateSlot(i, next)}
                       players={roster}

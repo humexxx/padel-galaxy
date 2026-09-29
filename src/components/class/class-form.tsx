@@ -183,11 +183,13 @@ export function ClassForm({ open, onOpenChange, editing }: Props) {
   /** Turn each slot into a real /players record, creating the ones the
    *  organizer typed fresh. Same resolution the pozo form does. */
   async function resolveStudents(ownerId: string): Promise<ClassStudent[]> {
+    // Typed names reuse only your own players — see the pozo form.
+    const ownRoster = roster.filter((r) => r.ownerId === ownerId)
     return Promise.all(
       slots.map(async (slot) => {
         const name = slot.name.trim()
         if (slot.id) return { id: slot.id, name }
-        const existing = findPlayerByName(roster, name)
+        const existing = findPlayerByName(ownRoster, name)
         if (existing) return { id: existing.id, name: existing.name }
         const id = doc(collection(db, "players")).id
         await createPlayer({ id, ownerId, name })
@@ -309,6 +311,7 @@ export function ClassForm({ open, onOpenChange, editing }: Props) {
             <div className="space-y-2">
               {slots.map((slot, i) => (
                 <PlayerCombobox
+                  ownerId={user?.uid}
                   key={i}
                   value={slot}
                   onChange={(next) => updateSlot(i, next)}

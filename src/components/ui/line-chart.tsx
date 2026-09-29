@@ -7,6 +7,7 @@ import {
   Tooltip,
   XAxis,
   YAxis,
+  type YAxisProps,
 } from "recharts"
 
 import { cn } from "@/lib/utils"
@@ -22,6 +23,8 @@ type Series = {
   invertY?: boolean
   /** Tick formatter for this axis. */
   formatY?: (value: number) => string
+  /** Axis range. Defaults to recharts' `[0, "auto"]`. */
+  domain?: YAxisProps["domain"]
   /** Human-readable name (for the tooltip / a11y label). */
   label?: string
 }
@@ -107,6 +110,7 @@ export function LineChart<T extends Point>({
             axisLine={{ stroke: "var(--color-border)" }}
             tickFormatter={primary.formatY ?? ((v) => String(v))}
             reversed={primary.invertY}
+            domain={primary.domain}
             allowDecimals={false}
             width={40}
           />
@@ -120,6 +124,7 @@ export function LineChart<T extends Point>({
               axisLine={{ stroke: "var(--color-border)" }}
               tickFormatter={secondary.formatY ?? ((v) => String(v))}
               reversed={secondary.invertY}
+              domain={secondary.domain}
               allowDecimals={false}
               width={36}
             />

@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from "react-router"
 import {
   ArrowLeftIcon,
   CheckCircle2Icon,
+  ChevronRightIcon,
   ClockIcon,
   GitMergeIcon,
   Loader2Icon,
@@ -52,7 +53,11 @@ import { normalizeName, type PlayerRecord } from "@/lib/players"
 import { isMergeBlocked, mergePlayers } from "@/lib/players-merge"
 import { cn } from "@/lib/utils"
 import type { StandingsSort } from "@/lib/pozo/standings"
-import type { PlayerPozoStat } from "@/lib/player-stats"
+import {
+  summarizeHistory,
+  type HistorySummary,
+  type PlayerPozoStat,
+} from "@/lib/player-stats"
 
 // Reuse the same filter keys as the standings table — keeps the tabs in
 // sync across the pozo and player screens (a sort selected on one is the
@@ -149,7 +154,7 @@ export function JugadorDetallePage() {
   // landing on this page (e.g. from a group's standings table) get
   // a read-only view — the rules would reject the write anyway, but
   // surfacing the form is misleading.
-  const { isAdmin } = useAuth()
+  const { isAdmin, user } = useAuth()
   const [metric, setMetric] = React.useState<Metric>("games")
   const [range, setRange] = React.useState<DateRange>("all")
   // Empty Set = no filter (all groups). Each id in the set is included.
@@ -159,16 +164,16 @@ export function JugadorDetallePage() {
     () => new Set(),
   )
 
-  // If the user arrived via Link state.from (e.g. clicking a player's name
-  // inside a pozo detail or group detail), the back arrow returns to that URL.
-  // Otherwise we fall back to the players roster. Plain const — the
-  // expression is cheap enough that `useMemo` would add overhead.
+  // Back returns to wherever the user came from (a pozo, a group). Without
+  // that, admins fall back to the roster; a cliente reached their own
+  // profile from the tab bar, so there's nowhere to go back to.
   const fromState = location.state as { from?: string } | null
-  const backTo = typeof fromState?.from === "string" ? fromState.from : "/jugadores"
-
-  const handleBack = React.useCallback(() => {
-    navigate(backTo)
-  }, [navigate, backTo])
+  const backTo =
+    typeof fromState?.from === "string"
+      ? fromState.from
+      : isAdmin
+        ? "/jugadores"
+        : null
 
   // Stable tooltip renderer per `metric` so the recharts subtree doesn't see
   // a new prop reference on unrelated re-renders (e.g. filter changes).
@@ -191,7 +196,6 @@ export function JugadorDetallePage() {
     // The chart consumes a stable `value` key for the primary line, decoupled
     // from the data-field name (gamesWon vs games etc.). finalPosition rides
     // along under its own key on the right axis.
-    const field = dataFieldFor(metric)
     const noGroupFilter = selectedGroupIds.size === 0
     return history
       .filter((h) => h.date >= cutoff)
@@ -200,14 +204,24 @@ export function JugadorDetallePage() {
           noGroupFilter ||
           (h.groupId !== null && selectedGroupIds.has(h.groupId)),
       )
-      .map((h) => ({
-        date: h.date,
-        pozoName: h.pozoName,
-        pozoId: h.pozoId,
-        value: h[field] as number,
-        finalPosition: h.finalPosition,
-      }))
-  }, [history, metric, range, selectedGroupIds])
+  }, [history, range, selectedGroupIds])
+
+  const chartData = React.useMemo(() => {
+    const field = dataFieldFor(metric)
+    return data.map((h) => ({
+      date: h.date,
+      pozoName: h.pozoName,
+      pozoId: h.pozoId,
+      value: h[field] as number,
+      finalPosition: h.finalPosition,
+    }))
+  }, [data, metric])
+
+  const summary = React.useMemo(() => summarizeHistory(data), [data])
+  const groupNames = React.useMemo(
+    () => new Map(groups.map((g) => [g.id, g.name])),
+    [groups],
+  )
 
   if (!hydrated) {
     return (
@@ -226,7 +240,9 @@ export function JugadorDetallePage() {
           <CardContent className="space-y-3 py-10 text-center">
             <Text className="text-base font-semibold">Jugador no encontrado.</Text>
             <Button asChild>
-              <Link to="/jugadores">Volver al roster</Link>
+              <Link to={isAdmin ? "/jugadores" : "/pozos"}>
+                {isAdmin ? "Volver al roster" : "Ir a Pozos"}
+              </Link>
             </Button>
           </CardContent>
         </Card>
@@ -237,14 +253,16 @@ export function JugadorDetallePage() {
   return (
     <PageContainer>
       <div className="flex items-start gap-2">
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Volver"
-          onClick={handleBack}
-        >
-          <ArrowLeftIcon className="size-4" />
-        </Button>
+        {backTo && (
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Volver"
+            onClick={() => navigate(backTo)}
+          >
+            <ArrowLeftIcon className="size-4" />
+          </Button>
+        )}
         <div className="flex flex-1 items-center gap-3">
           <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
             <UserIcon className="size-6" />
@@ -260,8 +278,9 @@ export function JugadorDetallePage() {
         </div>
       </div>
 
-      {isAdmin && <InviteCard player={player} />}
-      {isAdmin && <MergeCard player={player} />}
+      {historyHydrated && history.length > 0 && (
+        <SummaryTiles summary={summary} metricLabel={METRIC_LABELS[metric]} />
+      )}
 
       <Card>
         <CardHeader>
@@ -310,10 +329,11 @@ export function JugadorDetallePage() {
               hasAnyHistory={history.length > 0}
               rangeLabel={RANGE_LABELS[range].toLowerCase()}
               hasGroupFilter={selectedGroupIds.size > 0}
+              isSelf={Boolean(user && player.linkedUid === user.uid)}
             />
           ) : (
             <LineChart
-              data={data}
+              data={chartData}
               xKey="date"
               primary={{
                 // Data rows always use `value` — the dataFieldFor mapping
@@ -330,6 +350,9 @@ export function JugadorDetallePage() {
                 label: "Posición",
                 color: "var(--color-chart-2)",
                 invertY: true,
+                // A ranking starts at 1°; the floor keeps a lone 1st place
+                // from collapsing the axis to a single tick.
+                domain: [1, (max: number) => Math.max(2, max)],
                 formatY: (v) => `${v}°`,
               }}
               formatX={(v) =>
@@ -343,7 +366,149 @@ export function JugadorDetallePage() {
           )}
         </CardContent>
       </Card>
+
+      {historyHydrated && data.length > 0 && (
+        <PozoHistoryList
+          stats={data}
+          metric={metric}
+          groupNames={groupNames}
+          from={location.pathname}
+        />
+      )}
+
+      {isAdmin && <InviteCard player={player} />}
+      {isAdmin && <MergeCard player={player} />}
     </PageContainer>
+  )
+}
+
+function SummaryTiles({
+  summary,
+  metricLabel,
+}: {
+  summary: HistorySummary
+  metricLabel: string
+}) {
+  const tiles = [
+    { label: "Pozos", value: String(summary.pozos) },
+    { label: "Ganados", value: String(summary.wins) },
+    { label: "Podios", value: String(summary.podiums) },
+    {
+      label: "Promedio",
+      value:
+        summary.averagePosition === null
+          ? "—"
+          : `${summary.averagePosition.toLocaleString("es-AR")}°`,
+    },
+  ]
+  return (
+    <section aria-label={`Resumen · ranking por ${metricLabel.toLowerCase()}`}>
+      <dl className="grid grid-cols-4 gap-2">
+        {tiles.map((t) => (
+          <div
+            key={t.label}
+            className="flex flex-col items-center gap-0.5 rounded-2xl bg-muted px-2 py-3 text-center"
+          >
+            <dt className="text-[11px] font-medium text-muted-foreground">
+              {t.label}
+            </dt>
+            <dd className="text-xl font-semibold tabular-nums">{t.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  )
+}
+
+const METRIC_UNIT: Record<Metric, (s: PlayerPozoStat) => string> = {
+  games: (s) => `${s.gamesWon} games`,
+  matchesWon: (s) => `${s.matchesWon}G · ${s.matchesLost}P`,
+  points: (s) => `${s.points} pts`,
+}
+
+/**
+ * The pozos behind the chart, newest first, one row per pozo: where they
+ * finished and the number for the selected metric. Each row opens the pozo.
+ */
+function PozoHistoryList({
+  stats,
+  metric,
+  groupNames,
+  from,
+}: {
+  stats: PlayerPozoStat[]
+  metric: Metric
+  groupNames: Map<string, string>
+  from: string
+}) {
+  const rows = React.useMemo(() => [...stats].reverse(), [stats])
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Pozos jugados</CardTitle>
+        <CardDescription>
+          {rows.length} {rows.length === 1 ? "pozo" : "pozos"} · posición según
+          el ranking elegido arriba.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="px-2 sm:px-4">
+        <ul className="divide-y">
+          {rows.map((s) => {
+            const group = s.groupId ? groupNames.get(s.groupId) : undefined
+            return (
+              <li key={s.pozoId}>
+                <Link
+                  to={`/pozos/${s.pozoId}`}
+                  state={{ from }}
+                  className="flex min-h-14 items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-muted/60"
+                >
+                  <PositionBadge position={s.finalPosition} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{s.pozoName}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {shortDate(s.date)} · de {s.playerCount}
+                      {group ? ` · ${group}` : ""}
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-sm font-medium tabular-nums">
+                    {METRIC_UNIT[metric](s)}
+                  </span>
+                  <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
+                </Link>
+              </li>
+            )
+          })}
+        </ul>
+      </CardContent>
+    </Card>
+  )
+}
+
+/** "19 sept", with the year only when it isn't this one. */
+function shortDate(ts: number): string {
+  const d = new Date(ts)
+  return d.toLocaleDateString("es-AR", {
+    day: "numeric",
+    month: "short",
+    ...(d.getFullYear() !== new Date().getFullYear() && { year: "numeric" }),
+  })
+}
+
+function PositionBadge({ position }: { position: number }) {
+  return (
+    <span
+      aria-label={`Posición ${position}`}
+      className={cn(
+        "flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold tabular-nums",
+        position === 1
+          ? "bg-amber-100 text-amber-800 dark:bg-amber-400/15 dark:text-amber-300"
+          : position <= 3
+            ? "bg-primary/10 text-primary"
+            : "bg-muted text-muted-foreground",
+      )}
+    >
+      {position}°
+    </span>
   )
 }
 
@@ -364,24 +529,27 @@ function EmptyHistoryState({
   hasAnyHistory,
   rangeLabel,
   hasGroupFilter,
+  isSelf,
 }: {
   hasAnyHistory: boolean
   rangeLabel: string
   hasGroupFilter: boolean
+  isSelf: boolean
 }) {
   let title: string
   let body: string
   if (!hasAnyHistory) {
     title = "Sin pozos todavía"
-    body =
-      "Cuando termines tu primer pozo vas a ver acá tu evolución de games, partidos y puntos."
+    body = isSelf
+      ? "Cuando termines tu primer pozo vas a ver acá tu evolución de games, partidos y puntos."
+      : "Cuando termine su primer pozo vas a ver acá su evolución de games, partidos y puntos."
   } else if (hasGroupFilter) {
     title = "Sin datos para los grupos seleccionados"
     body =
       "Probá quitar algún grupo del filtro, o ampliar el rango de fechas."
   } else {
     title = `Sin pozos en los últimos ${rangeLabel}`
-    body = "Probá con un rango más amplio para ver tu historial completo."
+    body = "Probá con un rango más amplio para ver el historial completo."
   }
   return (
     <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed bg-muted/30 px-6 py-12 text-center">

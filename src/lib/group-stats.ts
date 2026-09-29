@@ -69,16 +69,20 @@ export function isoWeekKey(date: Date): string {
   return `${d.getUTCFullYear()}-W${String(weekNum).padStart(2, "0")}`
 }
 
-/** Subscribe to all pozos belonging to `groupId` for the current owner. */
+/**
+ * Admin view of a group's pozos: every pozo in the group, whoever organized
+ * it. Admins can read any pozo (see the `isAdmin()` read rule), so there's
+ * no need to scope by owner — scoping by owner is what used to hide pozos
+ * other admins ran in a shared group. Served by the `(groupId, createdAt)`
+ * composite index.
+ */
 export function subscribeGroupPozos(
-  ownerId: string,
   groupId: string,
   onData: (pozos: Pozo[]) => void,
   onError?: (err: Error) => void,
 ): Unsubscribe {
   const q = query(
     collection(db, "pozos"),
-    where("ownerId", "==", ownerId),
     where("groupId", "==", groupId),
     orderBy("createdAt", "asc"),
   )
@@ -170,10 +174,6 @@ const metricKey: Record<StandingsSort, keyof PlayerPozoEntry> = {
 }
 
 /**
- * Compute per-player aggregated standings AND per-pozo chart entries from a
- * set of pozos. Only counts FINISHED pozos in [range.start, range.end).
- */
-/**
  * "Typical" pozo size for a set of pozos. We prefer the **mode** (most
  * common player count) because organizers usually run pozos of a fixed
  * size — e.g. 8, 8, 8, 16 → 8, not the arithmetic mean of 10. When all
@@ -203,6 +203,10 @@ export function typicalPlayersPerPozo(pozos: Pozo[]): number {
     : counts[mid]
 }
 
+/**
+ * Compute per-player aggregated standings AND per-pozo chart entries from a
+ * set of pozos. Only counts FINISHED pozos in [range.start, range.end).
+ */
 export function aggregateGroup(
   pozos: Pozo[],
   range: DateRange,

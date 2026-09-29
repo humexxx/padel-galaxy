@@ -18,6 +18,8 @@ export type PlayerPozoStat = {
   groupId: string | null
   /** Millis since epoch — finishedAt if available, else createdAt. */
   date: number
+  /** How many players the pozo had — the scale a position is out of. */
+  playerCount: number
   /** Games this player accumulated in the pozo (sum across all their matches). */
   gamesWon: number
   /** Matches the player's team won. */
@@ -26,45 +28,51 @@ export type PlayerPozoStat = {
   matchesLost: number
   /** Tournament-style: 3 * win + 1 * tie. */
   points: number
-  /**
-   * Final position (1-based). Computed by sorting standings with the
-   * caller-chosen metric — when the user toggles the chart metric, we
-   * re-derive position for that metric.
-   */
+  /** Final position (1-based) under the ranking the caller picked. */
   finalPosition: number
 }
 
 const COLLECTION = "pozos"
 
 /**
- * Subscribe to all FINISHED pozos that include `playerId` in their players[].
+ * Who is looking, which decides which pozos they're allowed to read.
  *
- * Firestore can't filter "players array contains object with id == X" without
- * a denormalized field, so we fetch the caller's accessible pozos and filter
- * in-memory. "Accessible" is the UNION of:
- *
- *   1. Pozos the caller owns (`ownerId == callerUid`) — the organizer/admin
- *      path. Sees every pozo they created, including ones the target
- *      `playerId` was added to.
- *   2. Pozos where the caller is a linked participant
- *      (`linkedUids array-contains callerUid`) — the cliente self-view path.
- *      Without this, a cliente looking at their own profile would see nothing
- *      because they never own pozos.
- *
- * Both subscriptions are kept open so the chart updates live. Errors on
- * either query are logged but don't block the other — if e.g. the
- * participant query hits a rules edge case, the owner query still streams
- * its results. The dedupe-by-id step in `flush()` handles the overlap
- * (the caller is both owner AND participant for a pozo they organized
- * and also played in).
+ * An admin can read every pozo (see the `isAdmin()` read rule), so their
+ * view of a player is the player's whole history, whoever organized each
+ * pozo. Everyone else can only read pozos they own or play in, so a
+ * cliente sees their own history in full and, on someone else's profile,
+ * the pozos they shared with that player.
  */
-export function subscribePlayerHistory(
-  callerUid: string,
+export type HistoryViewer = { uid: string; isAdmin: boolean }
+
+/**
+ * Subscribe to the FINISHED pozos that include `playerId`.
+ *
+ * Pozos store players as objects, so "contains player X" can't be a
+ * Firestore filter without a denormalized field; each branch fetches what
+ * the viewer can read and filters in memory.
+ */
+export function subscribePlayerPozos(
+  viewer: HistoryViewer,
   playerId: string,
-  sort: StandingsSort,
-  onData: (stats: PlayerPozoStat[]) => void,
+  onData: (pozos: Pozo[]) => void,
   onError?: (err: Error) => void,
 ): Unsubscribe {
+  const keep = (pozos: Iterable<Pozo>) =>
+    [...pozos].filter(
+      (p) => p.status === "finished" && p.players.some((x) => x.id === playerId),
+    )
+
+  if (viewer.isAdmin) {
+    // Single-field equality: served by the automatic index.
+    const q = query(collection(db, COLLECTION), where("status", "==", "finished"))
+    return onSnapshot(
+      q,
+      (snap) => onData(keep(snap.docs.map((d) => d.data() as Pozo))),
+      onError,
+    )
+  }
+
   let owned: Pozo[] = []
   let participant: Pozo[] = []
   let ownedReady = false
@@ -74,55 +82,37 @@ export function subscribePlayerHistory(
     if (!ownedReady || !participantReady) return
     const byId = new Map<string, Pozo>()
     for (const p of owned) byId.set(p.id, p)
-    for (const p of participant) if (!byId.has(p.id)) byId.set(p.id, p)
-
-    const stats: PlayerPozoStat[] = []
-    for (const pozo of byId.values()) {
-      if (pozo.status !== "finished") continue
-      if (!pozo.players.some((p) => p.id === playerId)) continue
-      stats.push(computeStat(pozo, playerId, sort))
-    }
-    // Chronological order so the chart renders left-to-right correctly.
-    stats.sort((a, b) => a.date - b.date)
-    onData(stats)
+    for (const p of participant) byId.set(p.id, p)
+    onData(keep(byId.values()))
   }
 
-  const ownedQ = query(
-    collection(db, COLLECTION),
-    where("ownerId", "==", callerUid),
-  )
+  // Either branch failing (a denied read, an index still building) must
+  // not blank the other, so each marks itself ready and flushes.
   const unsubOwned = onSnapshot(
-    ownedQ,
+    query(collection(db, COLLECTION), where("ownerId", "==", viewer.uid)),
     (snap) => {
       owned = snap.docs.map((d) => d.data() as Pozo)
       ownedReady = true
       flush()
     },
     (err) => {
-      console.error("subscribePlayerHistory.owned error:", err)
       onError?.(err)
       ownedReady = true
       flush()
     },
   )
-
-  const participantQ = query(
-    collection(db, COLLECTION),
-    where("linkedUids", "array-contains", callerUid),
-  )
   const unsubParticipant = onSnapshot(
-    participantQ,
+    query(
+      collection(db, COLLECTION),
+      where("linkedUids", "array-contains", viewer.uid),
+    ),
     (snap) => {
       participant = snap.docs.map((d) => d.data() as Pozo)
       participantReady = true
       flush()
     },
     (err) => {
-      // Don't propagate up — the participant query can fail under the
-      // current rules' static analyzer (Property ownerId is undefined...);
-      // we still want to render whatever the owner query returned plus a
-      // clean empty state otherwise. Logged for ops.
-      console.error("subscribePlayerHistory.participant error:", err)
+      onError?.(err)
       participantReady = true
       flush()
     },
@@ -138,20 +128,57 @@ export function computeStat(
   pozo: Pozo,
   playerId: string,
   sort: StandingsSort,
-): PlayerPozoStat {
+): PlayerPozoStat | null {
   const standings = computeStandings(pozo.players, pozo.matches)
+  const me = standings.find((s) => s.player.id === playerId)
+  if (!me) return null
   const sorted = sortStandings(standings, sort, pozo.matches)
   const idx = sorted.findIndex((s) => s.player.id === playerId)
-  const me = standings.find((s) => s.player.id === playerId)!
   return {
     pozoId: pozo.id,
     pozoName: pozo.name,
     groupId: pozo.groupId ?? null,
     date: pozo.finishedAt ?? pozo.createdAt,
+    playerCount: pozo.players.length,
     gamesWon: me.gamesWon,
     matchesWon: me.matchesWon,
     matchesLost: me.matchesLost,
     points: me.points,
-    finalPosition: idx >= 0 ? idx + 1 : pozo.players.length,
+    finalPosition: idx + 1,
+  }
+}
+
+/** One stat per pozo, oldest first so a chart reads left to right. */
+export function buildPlayerHistory(
+  pozos: Pozo[],
+  playerId: string,
+  sort: StandingsSort,
+): PlayerPozoStat[] {
+  return pozos
+    .map((p) => computeStat(p, playerId, sort))
+    .filter((s): s is PlayerPozoStat => s !== null)
+    .sort((a, b) => a.date - b.date)
+}
+
+export type HistorySummary = {
+  pozos: number
+  wins: number
+  podiums: number
+  bestPosition: number | null
+  averagePosition: number | null
+}
+
+export function summarizeHistory(stats: PlayerPozoStat[]): HistorySummary {
+  if (stats.length === 0) {
+    return { pozos: 0, wins: 0, podiums: 0, bestPosition: null, averagePosition: null }
+  }
+  const positions = stats.map((s) => s.finalPosition)
+  const total = positions.reduce((a, b) => a + b, 0)
+  return {
+    pozos: stats.length,
+    wins: positions.filter((p) => p === 1).length,
+    podiums: positions.filter((p) => p <= 3).length,
+    bestPosition: Math.min(...positions),
+    averagePosition: Math.round((total / positions.length) * 10) / 10,
   }
 }

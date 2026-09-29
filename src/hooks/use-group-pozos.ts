@@ -19,22 +19,15 @@ export function useGroupPozos(groupId: string) {
       return
     }
     setHydrated(false)
-    // Admins (regular or super) usually OWN the group's pozos, so the
-    // owner-filtered query is the cheapest path and matches the
-    // existing composite index `(ownerId, groupId, createdAt)`. A
-    // cliente who only PARTICIPATES in pozos here would get 0 results
-    // from that query — they can't satisfy the ownerId filter — so
-    // they go through the participant-filtered variant instead.
-    //
-    // Known limitation: an admin viewing a group they don't own will
-    // see 0 pozos here. Out of scope for this fix; can be addressed
-    // later with a `(groupId, createdAt)` composite index.
+    // Admins can read every pozo, so they get the whole group whoever ran
+    // each pozo. A cliente can only read the pozos they played in, so they
+    // go through the participant query and filter by group in memory.
     const onData = (list: Pozo[]) => {
       setPozos(list)
       setHydrated(true)
     }
     const unsub = isAdmin
-      ? subscribeGroupPozos(user.uid, groupId, onData, (err) => {
+      ? subscribeGroupPozos(groupId, onData, (err) => {
           console.error("subscribeGroupPozos failed:", err)
           setPozos([])
           setHydrated(true)

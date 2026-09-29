@@ -33,7 +33,7 @@ const pkg = JSON.parse(readFileSync("./package.json", "utf8")) as {
 // rather than pointing at a tree that isn't what's running.
 const dirty = git("status --porcelain", "") !== ""
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   plugins: [react(), tailwindcss()],
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
@@ -44,11 +44,43 @@ export default defineConfig({
     __APP_BUILT_AT__: JSON.stringify(new Date().toISOString()),
   },
   resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
+    alias: [
+      { find: "@", replacement: path.resolve(__dirname, "./src") },
+      // react-router's package exports only point at its development build
+      // (dev warnings, the "Hey developer" error page). Ship the production
+      // one.
+      ...(command === "build"
+        ? [
+            {
+              find: /^react-router$/,
+              replacement: path.resolve(
+                __dirname,
+                "node_modules/react-router/dist/production/index.mjs",
+              ),
+            },
+          ]
+        : []),
+    ],
+  },
+  build: {
+    rolldownOptions: {
+      output: {
+        // Vendor code that every signed-in page loads gets its own files,
+        // so a deploy that only touches app code doesn't make returning
+        // users re-download Firebase and React.
+        codeSplitting: {
+          groups: [
+            { name: "firebase", test: /node_modules[\\/](@firebase|firebase)[\\/]/ },
+            {
+              name: "react",
+              test: /node_modules[\\/](react|react-dom|react-router|scheduler)[\\/]/,
+            },
+          ],
+        },
+      },
     },
   },
   server: {
     port: 3000,
   },
-})
+}))

@@ -8,6 +8,7 @@ import { RequireAdmin, RequireAuth, RequireSuperAdmin, RedirectIfAuthed } from "
 // path for every authenticated route — keep it eager so the chrome paints
 // immediately while the route chunk is in flight.
 import { AppLayout } from "@/routes/app-layout"
+import { RouteError } from "@/components/route-error"
 
 /**
  * Lazy-loaded routes. Each `lazyEl` call returns a wrapped React.lazy element
@@ -77,13 +78,16 @@ export const router = createBrowserRouter([
   {
     path: "/",
     element: <RedirectIfAuthed>{lazyEl(LandingPage)}</RedirectIfAuthed>,
+    errorElement: <RouteError />,
   },
   {
     path: "/login",
     element: <RedirectIfAuthed>{lazyEl(LoginPage)}</RedirectIfAuthed>,
+    errorElement: <RouteError />,
   },
   {
     element: <RequireAuth />,
+    errorElement: <RouteError />,
     children: [
       {
         element: <AppLayout />,
@@ -131,5 +135,5 @@ export const router = createBrowserRouter([
       },
     ],
   },
-  { path: "*", element: lazyEl(NotFoundPage) },
+  { path: "*", element: lazyEl(NotFoundPage), errorElement: <RouteError /> },
 ])

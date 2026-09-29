@@ -11,11 +11,27 @@
  *
  * Bump CACHE_VERSION to evict everything on the next deploy.
  */
-const CACHE_VERSION = "v1"
+const CACHE_VERSION = "v2"
 const SHELL_CACHE = `pg-shell-${CACHE_VERSION}`
 const ASSET_CACHE = `pg-assets-${CACHE_VERSION}`
 const SHELL_URL = "/index.html"
 const STATIC_FILE = /\.(?:svg|png|jpe?g|webp|ico|woff2?)$/
+// Hashed assets pile up with every deploy; keep the most recent ones.
+const MAX_ASSETS = 150
+
+// Hosting rewrites any unknown path to index.html with a 200, so a chunk
+// from a previous deploy "succeeds" as HTML. Never store that as a script.
+function isRealAsset(response) {
+  const type = response.headers.get("content-type") ?? ""
+  return response.ok && !type.includes("text/html")
+}
+
+async function trimAssets(cache) {
+  const keys = await cache.keys()
+  await Promise.all(
+    keys.slice(0, Math.max(0, keys.length - MAX_ASSETS)).map((k) => cache.delete(k)),
+  )
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -77,10 +93,16 @@ self.addEventListener("fetch", (event) => {
         (cached) =>
           cached ??
           fetch(request).then((response) => {
-            if (response.ok) {
-              const copy = response.clone()
-              caches.open(ASSET_CACHE).then((cache) => cache.put(request, copy))
+            if (!isRealAsset(response)) {
+              // A chunk that no longer exists: answer 404 so the page's
+              // import fails cleanly and the app can reload itself.
+              return response.ok ? new Response("", { status: 404 }) : response
             }
+            const copy = response.clone()
+            caches.open(ASSET_CACHE).then(async (cache) => {
+              await cache.put(request, copy)
+              await trimAssets(cache)
+            })
             return response
           }),
       ),
@@ -97,7 +119,7 @@ self.addEventListener("fetch", (event) => {
         const cached = await cache.match(request)
         const network = fetch(request)
           .then((response) => {
-            if (response.ok) void cache.put(request, response.clone())
+            if (isRealAsset(response)) void cache.put(request, response.clone())
             return response
           })
           .catch(() => cached ?? Response.error())

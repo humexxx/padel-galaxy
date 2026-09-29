@@ -120,6 +120,16 @@ function InviteAdminCard() {
           toast.error(`${existingUser.email} ya es admin.`)
           return
         }
+        // Only a verified address proves the account belongs to the person
+        // you typed. Anyone can register an unverified account under a
+        // coach's email before the coach does.
+        if (existingUser.emailVerified !== true) {
+          toast.error(
+            "Esa cuenta todavía no verificó su email. Pedile que lo verifique " +
+              "y volvé a intentar, o hacela admin desde «Clientes registrados».",
+          )
+          return
+        }
         await setUserRole(existingUser.uid, "admin")
         // If there's a leftover invite for the same email (e.g. they were
         // invited BEFORE they registered), clean it up so the pending-invites

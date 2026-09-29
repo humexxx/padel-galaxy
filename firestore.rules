@@ -61,6 +61,15 @@ service cloud.firestore {
     function isNonEmptyString(v, maxLen) {
       return v is string && v.size() > 0 && v.size() <= maxLen;
     }
+    // A /users write by its owner must carry the account's real email, and
+    // `emailVerified` (when present) must be the token's own flag.
+    function profileMirrorsToken() {
+      return request.resource.data.email == normalizedAuthEmail()
+        && (
+          !('emailVerified' in request.resource.data)
+          || request.resource.data.emailVerified == request.auth.token.email_verified
+        );
+    }
 
     match /pozos/{pozoId} {
       // Three independent read paths — split into separate `allow read`
@@ -86,9 +95,17 @@ service cloud.firestore {
       // queries even though the docs themselves were readable.
       allow read: if request.auth != null
                   && request.auth.uid in resource.data.linkedUids;
-      allow create: if isAuth()
+      // Creating a pozo is an organizer action (the /pozos/nuevo route is
+      // admin-gated). Letting any account create one would let a stranger
+      // plant a pozo — with any `linkedUids` — in someone else's list.
+      allow create: if isAdmin()
                     && request.resource.data.ownerId == request.auth.uid
                     && isNonEmptyString(request.resource.data.name, 80)
+                    && (
+                      !('linkedUids' in request.resource.data)
+                      || (request.resource.data.linkedUids is list
+                          && request.resource.data.linkedUids.size() <= 64)
+                    )
                     // Cap players/matches sizes so a malicious client can't
                     // grow a single doc up to the 1 MB Firestore limit.
                     && request.resource.data.players is list
@@ -127,9 +144,19 @@ service cloud.firestore {
       // The write rules below still enforce strict ownership + claim
       // semantics, so opening read doesn't change who can modify what.
       allow read: if request.auth != null;
+      // Two ways to create:
+      //   1. An admin adds an unlinked roster slot (pozo form, class form).
+      //   2. Anyone creates the one record that is linked to themselves —
+      //      the self-signup profile (`ensureSelfPlayer`).
+      // A record linked to *someone else* can't be created from a client:
+      // it would hijack that person's "Jugador" tab.
       allow create: if isAuth()
                     && request.resource.data.ownerId == request.auth.uid
-                    && isNonEmptyString(request.resource.data.name, 80);
+                    && isNonEmptyString(request.resource.data.name, 80)
+                    && (
+                      (isAdmin() && request.resource.data.get('linkedUid', null) == null)
+                      || request.resource.data.get('linkedUid', null) == request.auth.uid
+                    );
       // Two ways to update:
       //   1. Owner or admin can modify anything (within ownerId-stays-fixed,
       //      size caps preserved).
@@ -138,8 +165,15 @@ service cloud.firestore {
       //      the EXACT keys the claim can touch — previously the rule only
       //      enforced equality on a subset, so an invitee could rewrite
       //      `nameLower`, `createdAt`, etc. or add arbitrary new fields.
+      // A non-admin owner (a cliente's own self record) can edit it but not
+      // point `linkedUid` at another account.
       allow update: if (
-        (isOwner(resource.data.ownerId) || isAdmin())
+        (
+          isAdmin()
+          || (isOwner(resource.data.ownerId)
+              && request.resource.data.get('linkedUid', null)
+                 == resource.data.get('linkedUid', null))
+        )
         && request.resource.data.ownerId == resource.data.ownerId
         && isNonEmptyString(request.resource.data.name, 80)
       ) || (
@@ -179,7 +213,7 @@ service cloud.firestore {
       // matches `where participantUids array-contains uid` queries.
       allow read: if request.auth != null
                   && request.auth.uid in resource.data.participantUids;
-      allow create: if isAuth()
+      allow create: if isAdmin()
                     && request.resource.data.ownerId == request.auth.uid
                     && isNonEmptyString(request.resource.data.name, 80);
       allow update: if (isOwner(resource.data.ownerId) || isAdmin())
@@ -252,8 +286,13 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if isOwner(uid) || isAdmin();
 
+      // `email` and `emailVerified` mirror the auth token and can't be
+      // typed in: the admin panel finds accounts by email to promote them,
+      // so a forged email would let someone get promoted in place of the
+      // person the superadmin meant.
       allow create: if isOwner(uid)
                     && request.resource.data.uid == uid
+                    && profileMirrorsToken()
                     && (
                       request.resource.data.role == 'player'
                       || request.auth.token.admin == true
@@ -272,6 +311,18 @@ service cloud.firestore {
         isOwner(uid)
         && request.resource.data.uid == uid
         && request.resource.data.role == resource.data.role
+        && profileMirrorsToken()
+      ) || (
+        // An invited admin who registered before verifying their email
+        // starts as 'player'; once verified they may take the role their
+        // invite grants — the same proof the create rule asks for.
+        isOwner(uid)
+        && request.resource.data.uid == uid
+        && resource.data.role == 'player'
+        && request.resource.data.role == 'admin'
+        && hasVerifiedEmail()
+        && exists(/databases/$(database)/documents/adminInvites/$(normalizedAuthEmail()))
+        && profileMirrorsToken()
       ) || (
         isSuperAdminClaim()
         && request.resource.data.uid == uid
@@ -289,32 +340,43 @@ service cloud.firestore {
     //   AuthProvider does this to consume the invite during sign-in.
     match /adminInvites/{emailId} {
       allow read, write: if isSuperAdminClaim();
-      allow read, delete: if hasVerifiedEmail() && normalizedAuthEmail() == emailId;
+      // Seeing your own invite is harmless and is what lets an invited
+      // admin register while signups are closed, before they've verified.
+      // Using it (becoming admin, deleting it) still requires a verified
+      // email — see the /users create/update rules.
+      allow get: if isAuth() && normalizedAuthEmail() == emailId;
+      allow delete: if hasVerifiedEmail() && normalizedAuthEmail() == emailId;
     }
 
     // Mail queue read by the "Trigger Email from Firestore" extension.
-    // Locked down so any authenticated user CAN'T just enqueue arbitrary
-    // emails to arbitrary recipients (previously a spam/phishing relay):
     //
-    //   1. `_meta.ownerId == auth.uid` — every enqueued mail is attributable
-    //      to the user who sent it (so abuse is traceable / bannable).
-    //   2. `_meta.kind` must be a known flow — caps the attack surface to
-    //      the two intended use cases.
-    //   3. `admin-invite` requires superadmin (otherwise any user could
-    //      pretend to be sending admin invites that grant elevated trust
-    //      in the recipient's eyes).
+    //   1. Only admins enqueue mail; `admin-invite` additionally needs the
+    //      superadmin claim.
+    //   2. `_meta.ownerId == auth.uid` — every mail is attributable.
+    //   3. One recipient per mail and only `to` / `message` / `_meta`, so
+    //      `cc`, `bcc` or templates can't ride along.
     //
     // No one can read back what was queued — the extension uses admin SDK
     // outside of these rules.
     match /mail/{mailId} {
-      allow create: if isAuth()
+      // Only admins send invites, each to exactly one address, with only the
+      // fields the app writes. Without these checks any account could mail
+      // arbitrary recipients (cc/bcc included) from our sender.
+      allow create: if isAdmin()
+                    && request.resource.data.keys().hasOnly(['to', 'message', '_meta'])
                     && request.resource.data._meta.ownerId == request.auth.uid
-                    && request.resource.data._meta.kind in ['player-invite', 'admin-invite']
+                    && request.resource.data.message.keys().hasOnly(['subject', 'html', 'text'])
+                    && isNonEmptyString(request.resource.data.message.subject, 200)
                     && (
-                      request.resource.data._meta.kind == 'player-invite'
+                      (
+                        request.resource.data._meta.kind == 'player-invite'
+                        && isNonEmptyString(request.resource.data.to, 254)
+                      )
                       || (
                         request.resource.data._meta.kind == 'admin-invite'
                         && isSuperAdminClaim()
+                        && request.resource.data.to is list
+                        && request.resource.data.to.size() == 1
                       )
                     );
       allow read, update, delete: if false;

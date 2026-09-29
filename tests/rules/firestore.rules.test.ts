@@ -114,13 +114,29 @@ describe("/pozos/{id}", () => {
   }
 
   describe("create", () => {
-    it("allows owner to create with their own uid as ownerId", async () => {
-      await assertSucceeds(setDoc(doc(owner(), "pozos/p1"), pozo))
+    it("allows an admin to create a pozo they own", async () => {
+      await assertSucceeds(
+        setDoc(doc(admin(), "pozos/p1"), { ...pozo, ownerId: ADMIN }),
+      )
     })
 
-    it("denies creating with someone else's uid as ownerId", async () => {
+    it("denies a non-admin, even for a pozo they'd own", async () => {
+      await assertFails(setDoc(doc(owner(), "pozos/p1"), pozo))
+    })
+
+    it("denies an admin creating a pozo owned by someone else", async () => {
       await assertFails(
-        setDoc(doc(owner(), "pozos/p1"), { ...pozo, ownerId: OTHER }),
+        setDoc(doc(admin(), "pozos/p1"), { ...pozo, ownerId: OTHER }),
+      )
+    })
+
+    it("caps linkedUids", async () => {
+      await assertFails(
+        setDoc(doc(admin(), "pozos/p1"), {
+          ...pozo,
+          ownerId: ADMIN,
+          linkedUids: Array.from({ length: 65 }, (_, i) => `u${i}`),
+        }),
       )
     })
 
@@ -209,13 +225,41 @@ describe("/players/{id}", () => {
   }
 
   describe("create", () => {
-    it("allows the owner to create with their own uid", async () => {
-      await assertSucceeds(setDoc(doc(owner(), "players/pl1"), player))
+    it("allows an admin to add an unlinked roster slot", async () => {
+      await assertSucceeds(
+        setDoc(doc(admin(), "players/pl1"), { ...player, ownerId: ADMIN }),
+      )
+    })
+
+    it("denies an admin creating a record linked to someone else", async () => {
+      await assertFails(
+        setDoc(doc(admin(), "players/pl1"), {
+          ...player,
+          ownerId: ADMIN,
+          linkedUid: LINKED,
+        }),
+      )
+    })
+
+    it("allows anyone to create the record linked to themselves", async () => {
+      await assertSucceeds(
+        setDoc(doc(owner(), "players/pl1"), { ...player, linkedUid: OWNER }),
+      )
+    })
+
+    it("denies a non-admin creating an unlinked roster slot", async () => {
+      await assertFails(setDoc(doc(owner(), "players/pl1"), player))
+    })
+
+    it("denies a non-admin creating a record linked to someone else", async () => {
+      await assertFails(
+        setDoc(doc(owner(), "players/pl1"), { ...player, linkedUid: LINKED }),
+      )
     })
 
     it("denies creating with someone else's uid as ownerId", async () => {
       await assertFails(
-        setDoc(doc(owner(), "players/pl1"), { ...player, ownerId: OTHER }),
+        setDoc(doc(admin(), "players/pl1"), { ...player, ownerId: OTHER }),
       )
     })
 
@@ -235,8 +279,10 @@ describe("/players/{id}", () => {
       await assertSucceeds(getDoc(doc(linked(), "players/pl1")))
     })
 
-    it("denies a random authenticated user from reading", async () => {
-      await assertFails(getDoc(doc(other(), "players/pl1")))
+    // Deliberately open to any signed-in user (a cliente follows player
+    // links from group standings) — see the read rule's comment.
+    it("allows any signed-in user to read a player", async () => {
+      await assertSucceeds(getDoc(doc(other(), "players/pl1")))
     })
 
     it("denies unauthenticated reads", async () => {
@@ -245,17 +291,6 @@ describe("/players/{id}", () => {
 
     it("allows admin to read any player", async () => {
       await assertSucceeds(getDoc(doc(admin(), "players/pl1")))
-    })
-
-    it("does NOT leak players where linkedUid is null to non-owners", async () => {
-      await env.withSecurityRulesDisabled(async (ctx) => {
-        await setDoc(doc(ctx.firestore(), "players/pl2"), {
-          ...player,
-          id: "pl2",
-          linkedUid: null,
-        })
-      })
-      await assertFails(getDoc(doc(other(), "players/pl2")))
     })
   })
 
@@ -291,6 +326,20 @@ describe("/players/{id}", () => {
 
     it("denies a random authenticated user from updating", async () => {
       await assertFails(updateDoc(doc(other(), "players/pl1"), { name: "X" }))
+    })
+
+    it("denies a non-admin owner pointing their record at another account", async () => {
+      await seed("players/self", { ...player, id: "self", linkedUid: OWNER })
+      await assertFails(
+        updateDoc(doc(owner(), "players/self"), { linkedUid: LINKED }),
+      )
+    })
+
+    it("lets a non-admin owner edit their own record otherwise", async () => {
+      await seed("players/self", { ...player, id: "self", linkedUid: OWNER })
+      await assertSucceeds(
+        updateDoc(doc(owner(), "players/self"), { name: "Ana B.", nameLower: "ana b." }),
+      )
     })
   })
 
@@ -356,11 +405,14 @@ describe("/users/{uid}", () => {
     createdAt: 0,
     updatedAt: 0,
   }
+  // The profile must carry the account's own email, so self-writes run
+  // with that email in the token.
+  const alice = () => authedAs(OWNER, baseProfile.email)
 
   describe("create", () => {
     it("self can create their own profile with role='player'", async () => {
       await assertSucceeds(
-        setDoc(doc(owner(), `users/${OWNER}`), baseProfile),
+        setDoc(doc(alice(), `users/${OWNER}`), baseProfile),
       )
     })
 
@@ -373,7 +425,7 @@ describe("/users/{uid}", () => {
     it("denies creating with role='admin' without a matching invite", async () => {
       // No invite exists for this email → can't self-promote to admin.
       await assertFails(
-        setDoc(doc(owner(), `users/${OWNER}`), { ...baseProfile, role: "admin" }),
+        setDoc(doc(alice(), `users/${OWNER}`), { ...baseProfile, role: "admin" }),
       )
     })
 
@@ -396,12 +448,17 @@ describe("/users/{uid}", () => {
     it("legacy admin claim lets the user create with role='admin' (no invite needed)", async () => {
       const adminUid = "uid-legacy-admin"
       const ctx = env
-        .authenticatedContext(adminUid, { admin: true })
+        .authenticatedContext(adminUid, {
+          admin: true,
+          email: "legacy@example.com",
+          email_verified: true,
+        })
         .firestore()
       await assertSucceeds(
         setDoc(doc(ctx, `users/${adminUid}`), {
           ...baseProfile,
           uid: adminUid,
+          email: "legacy@example.com",
           role: "admin",
         }),
       )
@@ -409,7 +466,26 @@ describe("/users/{uid}", () => {
 
     it("denies create where data.uid does not match the doc id", async () => {
       await assertFails(
-        setDoc(doc(owner(), `users/${OWNER}`), { ...baseProfile, uid: OTHER }),
+        setDoc(doc(alice(), `users/${OWNER}`), { ...baseProfile, uid: OTHER }),
+      )
+    })
+
+    it("denies a profile whose email isn't the account's", async () => {
+      await assertFails(
+        setDoc(doc(alice(), `users/${OWNER}`), {
+          ...baseProfile,
+          email: "coach@club.com",
+        }),
+      )
+    })
+
+    it("denies an emailVerified flag that contradicts the token", async () => {
+      const unverified = authedAs(OWNER, baseProfile.email, { verified: false })
+      await assertFails(
+        setDoc(doc(unverified, `users/${OWNER}`), {
+          ...baseProfile,
+          emailVerified: true,
+        }),
       )
     })
 
@@ -443,19 +519,46 @@ describe("/users/{uid}", () => {
 
     it("self can update mirrored fields without touching role", async () => {
       await assertSucceeds(
-        updateDoc(doc(owner(), `users/${OWNER}`), { displayName: "Alice M." }),
+        updateDoc(doc(alice(), `users/${OWNER}`), { displayName: "Alice M." }),
       )
     })
 
     it("self cannot promote themselves to admin", async () => {
       await assertFails(
-        updateDoc(doc(owner(), `users/${OWNER}`), { role: "admin" }),
+        updateDoc(doc(alice(), `users/${OWNER}`), { role: "admin" }),
       )
     })
 
     it("self cannot promote themselves to superadmin", async () => {
       await assertFails(
-        updateDoc(doc(owner(), `users/${OWNER}`), { role: "superadmin" }),
+        updateDoc(doc(alice(), `users/${OWNER}`), { role: "superadmin" }),
+      )
+    })
+
+    it("self cannot change the profile's email to another address", async () => {
+      await assertFails(
+        updateDoc(doc(alice(), `users/${OWNER}`), { email: "coach@club.com" }),
+      )
+    })
+
+    it("a verified invitee may take the admin role their invite grants", async () => {
+      await seed(`adminInvites/${baseProfile.email}`, {
+        email: baseProfile.email,
+        createdAt: 0,
+      })
+      await assertSucceeds(
+        updateDoc(doc(alice(), `users/${OWNER}`), { role: "admin" }),
+      )
+    })
+
+    it("an unverified invitee can't take the admin role yet", async () => {
+      await seed(`adminInvites/${baseProfile.email}`, {
+        email: baseProfile.email,
+        createdAt: 0,
+      })
+      const unverified = authedAs(OWNER, baseProfile.email, { verified: false })
+      await assertFails(
+        updateDoc(doc(unverified, `users/${OWNER}`), { role: "admin" }),
       )
     })
 
@@ -482,7 +585,7 @@ describe("/users/{uid}", () => {
     beforeEach(() => seed(`users/${OWNER}`, baseProfile))
 
     it("allows self to delete (account-deletion flow)", async () => {
-      await assertSucceeds(deleteDoc(doc(owner(), `users/${OWNER}`)))
+      await assertSucceeds(deleteDoc(doc(alice(), `users/${OWNER}`)))
     })
 
     it("denies another user from deleting", async () => {
@@ -511,13 +614,19 @@ describe("/groups/{id}", () => {
   }
 
   describe("create", () => {
-    it("allows the owner to create a group with their own uid as ownerId", async () => {
-      await assertSucceeds(setDoc(doc(owner(), "groups/g1"), group))
+    it("allows an admin to create a group they own", async () => {
+      await assertSucceeds(
+        setDoc(doc(admin(), "groups/g1"), { ...group, ownerId: ADMIN }),
+      )
+    })
+
+    it("denies a non-admin, even for a group they'd own", async () => {
+      await assertFails(setDoc(doc(owner(), "groups/g1"), group))
     })
 
     it("denies creating with someone else's uid as ownerId", async () => {
       await assertFails(
-        setDoc(doc(owner(), "groups/g1"), { ...group, ownerId: OTHER }),
+        setDoc(doc(admin(), "groups/g1"), { ...group, ownerId: OTHER }),
       )
     })
 
@@ -766,11 +875,19 @@ describe("security: email_verified gates", () => {
     )
   })
 
-  it("rejects /adminInvites self-read when email is NOT verified", async () => {
+  it("lets an unverified invitee see their own invite (so they can register)", async () => {
+    const email = "invited@example.com"
+    await seed(`adminInvites/${email}`, { email, createdAt: 0 })
+    await assertSucceeds(
+      getDoc(doc(authedAs(OWNER, email, { verified: false }), `adminInvites/${email}`)),
+    )
+  })
+
+  it("never lets anyone see an invite for another email", async () => {
     const email = "invited@example.com"
     await seed(`adminInvites/${email}`, { email, createdAt: 0 })
     await assertFails(
-      getDoc(doc(authedAs(OWNER, email, { verified: false }), `adminInvites/${email}`)),
+      getDoc(doc(authedAs(OWNER, "someone@example.com"), `adminInvites/${email}`)),
     )
   })
 
@@ -835,6 +952,10 @@ describe("security: /mail queue lockdown", () => {
     to: "someone@example.com",
     message: { subject: "hi", html: "<p>hi</p>" },
   }
+  const adminInviteBody = {
+    to: ["someone@example.com"],
+    message: { subject: "hi", text: "hi", html: "<p>hi</p>" },
+  }
 
   it("rejects mail without _meta (the legacy spam path)", async () => {
     await assertFails(setDoc(doc(owner(), "mail/m1"), mailBody))
@@ -858,11 +979,40 @@ describe("security: /mail queue lockdown", () => {
     )
   })
 
-  it("allows player-invite mail from any authenticated user with valid _meta", async () => {
-    await assertSucceeds(
+  it("rejects player-invite mail from a non-admin", async () => {
+    await assertFails(
       setDoc(doc(owner(), "mail/m1"), {
         ...mailBody,
         _meta: { ownerId: OWNER, kind: "player-invite" },
+      }),
+    )
+  })
+
+  it("allows player-invite mail from an admin", async () => {
+    await assertSucceeds(
+      setDoc(doc(admin(), "mail/m1"), {
+        ...mailBody,
+        _meta: { ownerId: ADMIN, kind: "player-invite" },
+      }),
+    )
+  })
+
+  it("rejects a player invite addressed to several people", async () => {
+    await assertFails(
+      setDoc(doc(admin(), "mail/m1"), {
+        ...mailBody,
+        to: ["a@example.com", "b@example.com"],
+        _meta: { ownerId: ADMIN, kind: "player-invite" },
+      }),
+    )
+  })
+
+  it("rejects extra recipients riding along in cc/bcc", async () => {
+    await assertFails(
+      setDoc(doc(admin(), "mail/m1"), {
+        ...mailBody,
+        bcc: ["victim@example.com"],
+        _meta: { ownerId: ADMIN, kind: "player-invite" },
       }),
     )
   })
@@ -890,7 +1040,7 @@ describe("security: /mail queue lockdown", () => {
   it("allows admin-invite mail from a superadmin", async () => {
     await assertSucceeds(
       setDoc(doc(superAdmin(), "mail/m1"), {
-        ...mailBody,
+        ...adminInviteBody,
         _meta: { ownerId: ADMIN, kind: "admin-invite" },
       }),
     )
@@ -909,11 +1059,13 @@ describe("security: /mail queue lockdown", () => {
 describe("security: size caps on user-writable strings/lists", () => {
   const longString = "x".repeat(100)
 
+  // Run as an admin creating their own docs, so each case fails for the
+  // cap it names rather than for the role.
   it("rejects /pozos create with name longer than 80 chars", async () => {
     await assertFails(
-      setDoc(doc(owner(), "pozos/p1"), {
+      setDoc(doc(admin(), "pozos/p1"), {
         id: "p1",
-        ownerId: OWNER,
+        ownerId: ADMIN,
         name: longString,
         createdAt: 0,
         status: "draft",
@@ -930,9 +1082,9 @@ describe("security: size caps on user-writable strings/lists", () => {
       name: `Player ${i}`,
     }))
     await assertFails(
-      setDoc(doc(owner(), "pozos/p1"), {
+      setDoc(doc(admin(), "pozos/p1"), {
         id: "p1",
-        ownerId: OWNER,
+        ownerId: ADMIN,
         name: "Pozo",
         createdAt: 0,
         status: "draft",
@@ -945,9 +1097,9 @@ describe("security: size caps on user-writable strings/lists", () => {
 
   it("rejects /players create with name longer than 80 chars", async () => {
     await assertFails(
-      setDoc(doc(owner(), "players/pl1"), {
+      setDoc(doc(admin(), "players/pl1"), {
         id: "pl1",
-        ownerId: OWNER,
+        ownerId: ADMIN,
         name: longString,
         nameLower: longString.toLowerCase(),
         linkedUid: null,
@@ -961,9 +1113,9 @@ describe("security: size caps on user-writable strings/lists", () => {
 
   it("rejects /groups create with name longer than 80 chars", async () => {
     await assertFails(
-      setDoc(doc(owner(), "groups/g1"), {
+      setDoc(doc(admin(), "groups/g1"), {
         id: "g1",
-        ownerId: OWNER,
+        ownerId: ADMIN,
         name: longString,
         nameLower: longString.toLowerCase(),
         createdAt: 0,
@@ -974,9 +1126,9 @@ describe("security: size caps on user-writable strings/lists", () => {
 
   it("rejects /pozos create where players is not a list (type confusion)", async () => {
     await assertFails(
-      setDoc(doc(owner(), "pozos/p1"), {
+      setDoc(doc(admin(), "pozos/p1"), {
         id: "p1",
-        ownerId: OWNER,
+        ownerId: ADMIN,
         name: "Pozo",
         createdAt: 0,
         status: "draft",

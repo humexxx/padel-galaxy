@@ -163,6 +163,9 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"form">)
             <InputGroupAddon align="inline-end">
               <InputGroupButton
                 size="icon-xs"
+                // The eye stays icon-sized; the hit area grows to 40 px on
+                // phones so it can be tapped without hitting the input.
+                className="size-10 sm:size-6"
                 onClick={() => setShowPassword((v) => !v)}
                 disabled={busy}
                 aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
@@ -191,7 +194,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"form">)
             {mode === "signin" ? "¿No tenés cuenta?" : "¿Ya tenés cuenta?"}{" "}
             <button
               type="button"
-              className="font-medium text-foreground underline-offset-4 hover:underline"
+              className="inline-flex min-h-11 items-center font-medium text-foreground underline-offset-4 hover:underline sm:min-h-0"
               onClick={() => setMode((m) => (m === "signin" ? "signup" : "signin"))}
               disabled={busy}
             >

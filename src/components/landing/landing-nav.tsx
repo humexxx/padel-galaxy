@@ -35,10 +35,10 @@ export function LandingNav() {
           </nav>
         </div>
         <div className="flex items-center gap-1.5">
-          <InstallAppButton className="h-8 rounded-full text-[13px] text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900" />
+          <InstallAppButton className="h-10 rounded-full text-[13px] text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 sm:h-8" />
           <Link
             to="/login"
-            className="inline-flex h-8 items-center justify-center gap-1 rounded-full bg-zinc-900 px-4 text-[13px] font-medium text-white transition hover:bg-zinc-800"
+            className="inline-flex h-10 items-center justify-center gap-1 rounded-full bg-zinc-900 px-4 text-[13px] font-medium text-white transition hover:bg-zinc-800 sm:h-8"
           >
             Ingresar
             <ArrowRightIcon className="!size-3" />

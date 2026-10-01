@@ -6,7 +6,28 @@ permissions:
   contents: read
   pull-requests: write
 jobs:
+  rules_test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      # The Firestore emulator the rules tests run against is a Java program.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}-15
+      - run: npm ci
+      - run: npm install -g firebase-tools@15
+      - run: npm run test:rules
   build_and_preview:
+    needs: rules_test
     if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     steps:

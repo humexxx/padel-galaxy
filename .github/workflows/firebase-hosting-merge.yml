@@ -2,6 +2,8 @@
 # Firestore rules/indexes are NOT touched here — deploy them locally with
 # `npm run deploy-rules` (or `firebase deploy --only firestore`) when they
 # change. The CI service account doesn't have firestore admin roles.
+# The rules tests do run here, against the emulator, and a failure blocks
+# the hosting deploy.
 
 name: Deploy to Firebase Hosting on merge
 on:
@@ -9,7 +11,28 @@ on:
     branches:
       - main
 jobs:
+  rules_test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      # The Firestore emulator the rules tests run against is a Java program.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}-15
+      - run: npm ci
+      - run: npm install -g firebase-tools@15
+      - run: npm run test:rules
   build_and_deploy:
+    needs: rules_test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
